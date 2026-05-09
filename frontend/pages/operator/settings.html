@@ -1,98 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SETTL — Settings</title>
-  <link rel="stylesheet" href="../../css/app.css"/>
-</head>
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>SETTL — Settings</title><link rel="stylesheet" href="/css/app.css"/></head>
 <body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
 <div class="app-shell">
   <nav class="sidebar" id="sidebar"></nav>
   <div class="main-content">
-    <div class="topbar">
-      <span class="topbar-title">Settings</span>
-      <span class="badge badge-success">operator</span>
-    </div>
+    <div class="topbar"><div class="topbar-left"><button class="menu-btn" onclick="openSidebar()">☰</button><span class="topbar-title">Settings</span></div></div>
     <div class="page-body">
-
-      <!-- Profile -->
-      <div class="card" style="margin-bottom:20px;">
-        <h2 style="font-size:16px;font-weight:500;margin-bottom:18px;">Profile</h2>
-        <div class="form-group">
-          <label class="form-label">Full name</label>
-          <input class="form-input" id="full-name" placeholder="Your name"/>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Email</label>
-          <input class="form-input" id="email" type="email" disabled style="opacity:0.6;"/>
-          <div class="form-hint">Email cannot be changed here.</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Role</label>
-          <input class="form-input" id="role" disabled style="opacity:0.6;"/>
-        </div>
+      <div class="card" style="max-width:480px;">
+        <div class="card-title-row"><h2>Profile</h2></div>
+        <div class="form-group"><label class="form-label">Full name</label><input class="form-input" id="f-name"/></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="f-email" readonly style="background:var(--bg);color:var(--text-muted);"/></div>
+        <div class="form-group"><label class="form-label">Role</label><input class="form-input" id="f-role" readonly style="background:var(--bg);color:var(--text-muted);"/></div>
+        <div id="save-ok" class="alert alert-success" style="display:none;">Saved!</div>
         <button class="btn btn-primary" onclick="saveProfile()">Save changes</button>
       </div>
-
-      <!-- Change password -->
-      <div class="card">
-        <h2 style="font-size:16px;font-weight:500;margin-bottom:18px;">Change password</h2>
-        <div class="form-group">
-          <label class="form-label">New password</label>
-          <input class="form-input" id="new-pw" type="password" placeholder="Min 8 characters"/>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Confirm new password</label>
-          <input class="form-input" id="confirm-pw" type="password" placeholder="Repeat password"/>
-        </div>
-        <div style="display:flex;gap:10px;">
-          <button class="btn btn-primary" onclick="changePassword()">Update password</button>
-          <button class="btn btn-danger" onclick="doLogout()">Sign out</button>
-        </div>
-      </div>
-
     </div>
   </div>
 </div>
-
-<script src="../../js/modules/api.js"></script>
-<script src="../../js/modules/auth.js"></script>
-<script src="../../js/modules/toast.js"></script>
-<script src="../../js/modules/nav.js"></script>
+<script src="/js/modules/api.js"></script><script src="/js/modules/auth.js"></script><script src="/js/modules/toast.js"></script><script src="/js/modules/nav.js"></script>
 <script>
-  if (!auth.requireAuth()) throw new Error();
-  document.getElementById('sidebar').innerHTML = buildSidebar('operator');
-
-  const profile = auth.getProfile();
-  if (profile) {
-    document.getElementById('full-name').value = profile.full_name || '';
-    document.getElementById('email').value     = profile.email     || '';
-    document.getElementById('role').value      = profile.role      || 'operator';
-  }
-
+  if (!auth.requireAuth()) throw 0;
+  initSidebar('operator');
+  const u = auth.getUser();
+  document.getElementById('f-name').value  = u?.full_name||'';
+  document.getElementById('f-email').value = u?.email||'';
+  document.getElementById('f-role').value  = u?.role||'';
   async function saveProfile() {
-    toast.info('Profile update coming in Phase 4');
-  }
-
-  async function changePassword() {
-    const pw  = document.getElementById('new-pw').value;
-    const cfw = document.getElementById('confirm-pw').value;
-    if (pw.length < 8) { toast.error('Min 8 characters'); return; }
-    if (pw !== cfw)    { toast.error('Passwords do not match'); return; }
     try {
-      await api.auth.resetPassword(pw);
-      toast.success('Password updated');
-      document.getElementById('new-pw').value     = '';
-      document.getElementById('confirm-pw').value = '';
-    } catch (err) { toast.error(err.message); }
-  }
-
-  async function doLogout() {
-    try { await api.auth.logout(); } catch {}
-    auth.clear();
-    window.location.href = '/pages/auth/login.html';
+      const { user } = await api.auth.profile({ full_name: document.getElementById('f-name').value });
+      auth.save(auth.getToken(), user);
+      document.getElementById('save-ok').style.display=''; setTimeout(()=>document.getElementById('save-ok').style.display='none',2500);
+    } catch(err) { toast.error(err.message); }
   }
 </script>
-</body>
-</html>
+</body></html>

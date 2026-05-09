@@ -1,24 +1,29 @@
+const jwt      = require('jsonwebtoken');
 const { supabase } = require('../config/supabase');
 
-/**
- * Validates the Supabase JWT from the Authorization header.
- * Attaches req.user on success.
- */
 async function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing Authorization header' });
   }
+  const token = header.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    // Attach user from DB
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email, role, full_name, is_active')
+      .eq('id', payload.sub)
+      .single();
 
-  const token = authHeader.split(' ')[1];
-
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) {
+    if (error || !user || !user.is_active) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
-
-  req.user = user;
-  next();
 }
 
 module.exports = authMiddleware;

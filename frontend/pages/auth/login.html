@@ -2,52 +2,119 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>SETTL — Sign in</title>
-  <link rel="stylesheet" href="../../css/app.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
 </head>
 <body>
 <div class="auth-wrap">
   <div class="auth-card">
     <div class="auth-logo">SETTL</div>
-    <div class="auth-sub">Sign in to your account</div>
+    <div class="auth-sub">Payment gateway · Sign in</div>
 
-    <div class="form-group">
-      <label class="form-label">Email</label>
-      <input class="form-input" id="email" type="email" />
+    <div class="mode-switch" style="margin-bottom:22px;">
+      <button class="mode-btn active" id="tab-login"  onclick="tab('login')">Sign in</button>
+      <button class="mode-btn"        id="tab-signup" onclick="tab('signup')">Create account</button>
     </div>
-    <div class="form-group">
-      <label class="form-label">Password</label>
-      <input class="form-input" id="password" type="password" />
+
+    <!-- Login -->
+    <div id="v-login">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="l-email" type="email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" id="l-pass"  type="password" placeholder="Your password" autocomplete="current-password"/>
+      </div>
+      <div id="l-err" class="alert alert-error" style="display:none;"></div>
+      <button class="btn btn-primary btn-full" id="l-btn" onclick="doLogin()">Sign in</button>
     </div>
-    <button class="btn btn-primary" style="width:100%;" onclick="doLogin()">Sign in</button>
-    <p style="text-align:center;margin-top:16px;">
-      No account? <a href="register.html">Create one</a>
-    </p>
+
+    <!-- Signup -->
+    <div id="v-signup" style="display:none;">
+      <div class="form-group">
+        <label class="form-label">Full name</label>
+        <input class="form-input" id="s-name"  type="text"     placeholder="Your name"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="s-email" type="email"    placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password <span style="color:var(--text-hint);font-weight:400;">(min 8 chars)</span></label>
+        <input class="form-input" id="s-pass"  type="password" placeholder="Create a password" autocomplete="new-password"/>
+      </div>
+      <div id="s-err" class="alert alert-error"   style="display:none;"></div>
+      <div id="s-ok"  class="alert alert-success" style="display:none;"></div>
+      <button class="btn btn-primary btn-full" id="s-btn" onclick="doSignup()">Create account</button>
+    </div>
   </div>
 </div>
-<script src="../../js/modules/api.js"></script>
-<script src="../../js/modules/auth.js"></script>
-<script src="../../js/modules/toast.js"></script>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
 <script>
   if (auth.isLoggedIn()) window.location.href = '/pages/dashboard.html';
 
+  function tab(t) {
+    const isL = t === 'login';
+    document.getElementById('v-login').style.display  = isL ? '' : 'none';
+    document.getElementById('v-signup').style.display = isL ? 'none' : '';
+    document.getElementById('tab-login').classList.toggle('active',  isL);
+    document.getElementById('tab-signup').classList.toggle('active', !isL);
+  }
+
+  function setErr(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg; el.style.display = msg ? '' : 'none';
+  }
+
   async function doLogin() {
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    
-    if (!email || !password) {
-      toast.error('Email and password required');
-      return;
-    }
-    
+    const email = document.getElementById('l-email').value.trim();
+    const pass  = document.getElementById('l-pass').value;
+    setErr('l-err', '');
+    if (!email || !pass) { setErr('l-err', 'Email and password required'); return; }
+    const btn = document.getElementById('l-btn');
+    btn.disabled = true; btn.textContent = 'Signing in…';
     try {
-      const { user, session } = await api.auth.login(email, password);
-      auth.setSession(session, user);
+      const { token, user } = await api.auth.login(email, pass);
+      auth.save(token, user);
       window.location.href = '/pages/dashboard.html';
-    } catch(err) {
-      toast.error(err.message);
+    } catch (err) {
+      setErr('l-err', err.message);
+      btn.disabled = false; btn.textContent = 'Sign in';
     }
   }
+
+  async function doSignup() {
+    const name  = document.getElementById('s-name').value.trim();
+    const email = document.getElementById('s-email').value.trim();
+    const pass  = document.getElementById('s-pass').value;
+    setErr('s-err', '');
+    document.getElementById('s-ok').style.display = 'none';
+    if (!email || !pass) { setErr('s-err', 'Email and password required'); return; }
+    if (pass.length < 8) { setErr('s-err', 'Password must be at least 8 characters'); return; }
+    const btn = document.getElementById('s-btn');
+    btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      await api.auth.signup(email, pass, name);
+      document.getElementById('s-ok').textContent = 'Account created! Signing you in…';
+      document.getElementById('s-ok').style.display = '';
+      const { token, user } = await api.auth.login(email, pass);
+      auth.save(token, user);
+      window.location.href = '/pages/dashboard.html';
+    } catch (err) {
+      setErr('s-err', err.message);
+      btn.disabled = false; btn.textContent = 'Create account';
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    if (document.getElementById('v-login').style.display !== 'none') doLogin();
+    else doSignup();
+  });
 </script>
 </body>
 </html>

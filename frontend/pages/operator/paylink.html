@@ -2,99 +2,87 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>SETTL — Payment link</title>
-  <link rel="stylesheet" href="../../css/app.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <!-- QR code library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
 <div class="app-shell">
   <nav class="sidebar" id="sidebar"></nav>
   <div class="main-content">
-
     <div class="topbar">
-      <span class="topbar-title">Payment links</span>
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Payment link</span>
+      </div>
       <span class="badge badge-success">operator</span>
     </div>
 
     <div class="page-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+      <div class="card" style="max-width:520px;">
+        <div class="card-title-row"><h2>Create a payment request</h2></div>
+        <p style="color:var(--text-muted);font-size:14px;margin-bottom:18px;line-height:1.6;">
+          Generate a Solana Pay QR code. Your customer scans it with any Solana wallet (Phantom, Backpack, etc.) to pay AUDD directly into your escrow vault.
+        </p>
 
-        <!-- Generator form -->
-        <div class="card">
-          <h2 style="font-size:16px;font-weight:500;margin-bottom:18px;">Generate payment link</h2>
-
-          <div class="form-group">
-            <label class="form-label">Amount (AUDD)</label>
-            <input class="form-input" id="f-amount" type="number" step="0.000001" min="0" placeholder="Leave blank for open amount"/>
-            <div class="form-hint">Customer enters any amount if left blank.</div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Description</label>
-            <input class="form-input" id="f-desc" placeholder="Invoice #001 — Website design"/>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Expires in (hours)</label>
-            <select class="form-input" id="f-expires">
-              <option value="1">1 hour</option>
-              <option value="6">6 hours</option>
-              <option value="24" selected>24 hours</option>
-              <option value="72">3 days</option>
-              <option value="168">7 days</option>
-              <option value="720">30 days</option>
-            </select>
-          </div>
-
-          <button class="btn btn-primary" style="width:100%;" id="gen-btn" onclick="generateLink()">Generate link</button>
+        <div class="form-group">
+          <label class="form-label">Merchant</label>
+          <select class="form-input" id="sel-merchant">
+            <option value="">Loading…</option>
+          </select>
         </div>
-
-        <!-- Generated link display -->
-        <div class="card" id="result-card" style="display:none;">
-          <h2 style="font-size:16px;font-weight:500;margin-bottom:16px;">Payment link ready</h2>
-
-          <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:16px;">
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Share this link with your customer</div>
-            <div id="result-link" style="font-family:var(--font-mono);font-size:13px;word-break:break-all;"></div>
-          </div>
-
-          <div style="display:flex;gap:8px;margin-bottom:16px;">
-            <button class="btn btn-primary" style="flex:1;" onclick="copyLink()">Copy link</button>
-            <button class="btn btn-secondary" style="flex:1;" onclick="showQR()">Show QR</button>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
-            <div style="color:var(--text-muted);">Amount</div>
-            <div id="result-amount" style="font-weight:500;"></div>
-            <div style="color:var(--text-muted);">Description</div>
-            <div id="result-desc"></div>
-            <div style="color:var(--text-muted);">Expires at</div>
-            <div id="result-expires" style="font-size:12px;"></div>
-          </div>
-
-          <!-- QR placeholder -->
-          <div id="qr-area" style="display:none;margin-top:16px;text-align:center;padding:20px;background:var(--bg);border-radius:var(--radius-sm);">
-            <div style="color:var(--text-muted);font-size:13px;">QR code generation coming in Phase 4</div>
-          </div>
-
-          <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="resetForm()">Generate another</button>
+        <div class="form-group">
+          <label class="form-label">Amount (AUDD) <span style="color:var(--text-hint);font-weight:400;">— leave blank for open</span></label>
+          <input class="form-input" id="inp-amount" type="number" min="0.01" step="0.01" placeholder="e.g. 10.00"/>
         </div>
-
+        <div class="form-group">
+          <label class="form-label">Message / order reference <span style="color:var(--text-hint);font-weight:400;">— optional</span></label>
+          <input class="form-input" id="inp-msg" placeholder="Order #1234"/>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="generateQR()">Generate QR code</button>
       </div>
 
-      <!-- Active links table -->
-      <div class="card" style="margin-top:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h2 style="font-size:16px;font-weight:500;">Active payment links</h2>
-          <button class="btn btn-secondary" style="font-size:13px;" onclick="loadLinks()">Refresh</button>
+      <!-- QR Result -->
+      <div class="card" id="qr-result" style="display:none;max-width:520px;">
+        <div class="card-title-row"><h2>Scan to pay</h2></div>
+
+        <!-- Step indicator -->
+        <div class="steps" id="steps">
+          <div class="step active" id="step1">1</div>
+          <div class="step-line" id="line1"></div>
+          <div class="step waiting" id="step2">2</div>
+          <div class="step-line" id="line2"></div>
+          <div class="step waiting" id="step3">✓</div>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Token</th><th>Amount</th><th>Description</th><th>Status</th><th>Expires</th><th>Action</th></tr>
-            </thead>
-            <tbody id="links-tbody">
-              <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr>
-            </tbody>
-          </table>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;" id="step-label">Waiting for customer to scan…</div>
+
+        <div class="qr-wrap">
+          <div id="qr-canvas"></div>
+          <div style="text-align:center;">
+            <div style="font-size:13px;font-weight:600;" id="qr-merchant-name"></div>
+            <div style="font-size:20px;font-weight:700;color:var(--brand);margin:4px 0;" id="qr-amount-display"></div>
+            <div style="font-size:12px;color:var(--text-muted);">AUDD · Solana Devnet</div>
+          </div>
+        </div>
+
+        <div id="qr-status-area" style="margin-top:14px;">
+          <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:14px;" id="polling-indicator">
+            <div class="spinner"></div>
+            <span>Watching for payment…</span>
+          </div>
+        </div>
+
+        <div id="payment-confirmed" class="alert alert-success" style="display:none;margin-top:14px;">
+          ✓ Payment confirmed on-chain!
+          <a id="confirm-tx-link" href="#" target="_blank" style="font-size:12px;display:block;margin-top:4px;font-family:var(--font-mono);">View transaction</a>
+        </div>
+
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="copyPayUrl()">Copy Solana Pay URL</button>
+          <button class="btn btn-secondary btn-sm" onclick="newPayment()">New payment</button>
         </div>
       </div>
 
@@ -102,101 +90,124 @@
   </div>
 </div>
 
-<script src="../../js/modules/api.js"></script>
-<script src="../../js/modules/auth.js"></script>
-<script src="../../js/modules/toast.js"></script>
-<script src="../../js/modules/nav.js"></script>
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
 <script>
-  if (!auth.requireAuth()) throw new Error();
-  document.getElementById('sidebar').innerHTML = buildSidebar('operator');
+  if (!auth.requireAuth()) throw 0;
+  initSidebar(auth.getMode());
 
-  let merchantId  = null;
-  let currentLink = '';
+  let pollInterval = null;
+  let currentRef   = null;
+  let currentUrl   = null;
 
-  async function init() {
+  async function loadMerchants() {
+    const { merchants } = await api.merchants.list();
+    const sel = document.getElementById('sel-merchant');
+    const active = merchants.filter(m => m.is_active);
+    if (!active.length) {
+      sel.innerHTML = '<option value="">No active merchants</option>';
+      return;
+    }
+    sel.innerHTML = active.map(m => `<option value="${m.merchant_id}">${m.name||m.merchant_id}</option>`).join('');
+  }
+
+  async function generateQR() {
+    const merchantId = document.getElementById('sel-merchant').value;
+    const amountVal  = document.getElementById('inp-amount').value;
+    const message    = document.getElementById('inp-msg').value.trim();
+    if (!merchantId) { toast.error('Select a merchant'); return; }
+
+    stopPolling();
+
+    const amount = amountVal ? parseFloat(amountVal) : null;
+
     try {
-      const { merchants } = await api.merchants.list();
-      const active = merchants.find(m => m.is_active);
-      if (active) { merchantId = active.merchant_id; loadLinks(); }
-      else toast.info('No active merchant — ask your developer to register one.');
+      const session = await api.payments.session({
+        merchant_id: merchantId,
+        amount:      amount || null,
+        message:     message || null,
+      });
+
+      currentRef = session.reference;
+      currentUrl = session.url;
+
+      // Render QR
+      document.getElementById('qr-canvas').innerHTML = '';
+      new QRCode(document.getElementById('qr-canvas'), {
+        text:          session.url,
+        width:         220, height: 220,
+        colorDark:     '#111827',
+        colorLight:    '#ffffff',
+        correctLevel:  QRCode.CorrectLevel.M,
+      });
+
+      document.getElementById('qr-merchant-name').textContent  = session.label || merchantId;
+      document.getElementById('qr-amount-display').textContent = amount ? amount.toFixed(2) + ' AUDD' : 'Open amount';
+
+      document.getElementById('qr-result').style.display = '';
+      document.getElementById('payment-confirmed').style.display = 'none';
+      document.getElementById('polling-indicator').style.display = 'flex';
+      setStep(1);
+      startPolling(currentRef);
+
     } catch (err) { toast.error(err.message); }
   }
 
-  async function generateLink() {
-    if (!merchantId) { toast.error('No active merchant found'); return; }
-    const amount      = document.getElementById('f-amount').value;
-    const description = document.getElementById('f-desc').value.trim();
-    const expires     = document.getElementById('f-expires').value;
+  function startPolling(ref) {
+    stopPolling();
+    setStep(2);
+    document.getElementById('step-label').textContent = 'Customer scanning or sending payment…';
 
-    const btn = document.getElementById('gen-btn');
-    btn.disabled = true; btn.textContent = 'Generating…';
-
-    try {
-      const result = await api.payments.createLink({
-        merchant_id:      merchantId,
-        amount:           amount ? parseFloat(amount) * 1_000_000 : null,
-        description:      description || null,
-        expires_in_hours: parseInt(expires),
-      });
-
-      currentLink = result.link;
-      document.getElementById('result-link').textContent    = result.link;
-      document.getElementById('result-amount').textContent  = result.amount ? (result.amount / 1_000_000) + ' AUDD' : 'Open amount';
-      document.getElementById('result-desc').textContent    = description || '—';
-      document.getElementById('result-expires').textContent = new Date(result.expiresAt).toLocaleString();
-      document.getElementById('result-card').style.display  = 'block';
-      loadLinks();
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      btn.disabled = false; btn.textContent = 'Generate link';
-    }
+    pollInterval = setInterval(async () => {
+      try {
+        const result = await api.payments.poll(ref);
+        if (result.status === 'confirmed') {
+          stopPolling();
+          setStep(3);
+          document.getElementById('step-label').textContent = 'Payment received!';
+          document.getElementById('polling-indicator').style.display = 'none';
+          const conf = document.getElementById('payment-confirmed');
+          conf.style.display = '';
+          const link = document.getElementById('confirm-tx-link');
+          link.href        = `https://explorer.solana.com/tx/${result.tx}?cluster=devnet`;
+          link.textContent = result.tx?.slice(0,20) + '…';
+          toast.success('Payment confirmed!');
+        } else if (result.status === 'failed') {
+          stopPolling();
+          toast.error('Payment validation failed: ' + (result.error || 'unknown'));
+        }
+      } catch {}
+    }, 1000);
   }
 
-  function copyLink() {
-    navigator.clipboard.writeText(currentLink).then(() => toast.success('Link copied!'));
+  function stopPolling() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
   }
 
-  function showQR() {
-    document.getElementById('qr-area').style.display =
-      document.getElementById('qr-area').style.display === 'none' ? 'block' : 'none';
+  function setStep(n) {
+    [1,2,3].forEach(i => {
+      const s = document.getElementById('step'+i);
+      const l = document.getElementById('line'+i);
+      s.className = `step ${i<n?'done':i===n?'active':'waiting'}`;
+      if (l) l.className = `step-line ${i<n?'done':''}`;
+    });
   }
 
-  function resetForm() {
-    document.getElementById('result-card').style.display = 'none';
-    document.getElementById('f-amount').value = '';
-    document.getElementById('f-desc').value   = '';
+  function copyPayUrl() {
+    if (!currentUrl) return;
+    navigator.clipboard.writeText(currentUrl).then(() => toast.success('Solana Pay URL copied!'));
   }
 
-  async function loadLinks() {
-    if (!merchantId) return;
-    try {
-      const { links } = await api.payments.listForMerchant(merchantId, { limit: 20 });
-      const tbody = document.getElementById('links-tbody');
-      if (!links.length) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">No links yet</td></tr>`;
-        return;
-      }
-      tbody.innerHTML = links.map(l => `
-        <tr>
-          <td style="font-family:var(--font-mono);font-size:12px;">${l.token.slice(0,8)}…</td>
-          <td>${l.amount ? (l.amount/1_000_000)+' AUDD' : 'Open'}</td>
-          <td style="color:var(--text-muted);font-size:13px;">${l.description || '—'}</td>
-          <td><span class="badge ${l.status==='active'?'badge-success':l.status==='used'?'badge-info':'badge-pending'}">${l.status}</span></td>
-          <td style="font-size:12px;color:var(--text-muted);">${new Date(l.expires_at).toLocaleString()}</td>
-          <td>${l.status==='active'?`<button class="btn btn-secondary" style="font-size:12px;padding:4px 8px;" onclick="copyPayLink('${l.token}')">Copy</button>`:'—'}</td>
-        </tr>`).join('');
-    } catch (err) {
-      toast.error('Failed to load links: ' + err.message);
-    }
+  function newPayment() {
+    stopPolling();
+    document.getElementById('qr-result').style.display = 'none';
+    document.getElementById('inp-amount').value = '';
+    document.getElementById('inp-msg').value    = '';
   }
 
-  async function copyPayLink(token) {
-    const url = `${window.location.origin}/pages/pay.html?token=${token}`;
-    navigator.clipboard.writeText(url).then(() => toast.success('Link copied!'));
-  }
-
-  init();
+  loadMerchants();
 </script>
 </body>
 </html>

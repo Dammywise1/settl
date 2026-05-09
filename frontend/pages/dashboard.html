@@ -2,199 +2,102 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>SETTL — Dashboard</title>
-  <link rel="stylesheet" href="../css/app.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
 </head>
 <body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
 <div class="app-shell">
   <nav class="sidebar" id="sidebar"></nav>
   <div class="main-content">
-
     <div class="topbar">
-      <span class="topbar-title">Overview</span>
-      <div style="display:flex;align-items:center;gap:12px;">
-        <span id="realtime-dot" style="width:8px;height:8px;border-radius:50%;background:var(--border);display:inline-block;" title="Realtime"></span>
-        <span class="badge badge-info" id="mode-badge">—</span>
-        <span id="user-email" style="font-size:13px;color:var(--text-muted);"></span>
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Overview</span>
       </div>
+      <span class="badge badge-info" id="mode-badge"></span>
     </div>
 
     <div class="page-body">
-
       <div class="card-grid">
-        <div class="card">
-          <div class="card-title">Total pending</div>
-          <div class="card-value" id="stat-balance">—</div>
-          <div class="card-sub">AUDD in escrow</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Next release</div>
-          <div class="card-value" id="stat-release" style="font-size:22px;">—</div>
-          <div class="card-sub">6am daily · Australia/Sydney</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Total payments</div>
-          <div class="card-value" id="stat-payments">—</div>
-          <div class="card-sub">All time deposits</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Active merchants</div>
-          <div class="card-value" id="stat-merchants">—</div>
-          <div class="card-sub">On-chain registered</div>
-        </div>
+        <div class="card"><div class="card-title">Pending</div><div class="card-value" id="s-pending">—</div><div class="card-sub">AUDD in escrow</div></div>
+        <div class="card"><div class="card-title">Payments</div><div class="card-value" id="s-payments">—</div><div class="card-sub">All time</div></div>
+        <div class="card"><div class="card-title">Next release</div><div class="card-value" id="s-release">—</div><div class="card-sub">Daily at 6am UTC</div></div>
+        <div class="card"><div class="card-title">Merchants</div><div class="card-value" id="s-merchants">—</div><div class="card-sub">Active on-chain</div></div>
       </div>
 
-      <!-- Last release result -->
-      <div class="card" id="last-release-card" style="display:none;margin-bottom:16px;">
-        <h2 style="font-size:14px;font-weight:500;color:var(--text-muted);margin-bottom:10px;">Last release run</h2>
-        <div id="last-release-content"></div>
-      </div>
-
-      <!-- Merchant overview table -->
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h2 style="font-size:16px;font-weight:500;">Merchant balances</h2>
-          <button class="btn btn-secondary" style="font-size:13px;" onclick="loadDashboard()">Refresh</button>
+        <div class="card-title-row">
+          <h2>Merchant balances</h2>
+          <button class="btn btn-secondary btn-sm" onclick="load()">Refresh</button>
         </div>
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr>
-                <th>Merchant</th>
-                <th>Status</th>
-                <th>Pending balance</th>
-                <th>Total payments</th>
-                <th>Last released</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="merchant-tbody">
-              <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-hint);">Loading…</td></tr>
-            </tbody>
+            <thead><tr><th>Merchant</th><th>Status</th><th>Pending (AUDD)</th><th>Payments</th><th>Last release</th></tr></thead>
+            <tbody id="m-tbody"><tr><td colspan="5" style="text-align:center;padding:28px;color:var(--text-hint);">Loading…</td></tr></tbody>
           </table>
         </div>
       </div>
-
     </div>
   </div>
 </div>
 
-<script src="../js/modules/api.js"></script>
-<script src="../js/modules/auth.js"></script>
-<script src="../js/modules/toast.js"></script>
-<script src="../js/modules/nav.js"></script>
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
 <script>
-  if (!auth.requireAuth()) throw new Error();
+  if (!auth.requireAuth()) throw 0;
+  const mode = auth.getMode();
+  initSidebar(mode);
+  document.getElementById('mode-badge').textContent = mode;
 
-  const mode    = auth.getMode();
-  const profile = auth.getProfile();
-
-  document.getElementById('sidebar').innerHTML = buildSidebar(mode);
-  document.getElementById('mode-badge').textContent  = mode;
-  document.getElementById('user-email').textContent  = profile?.email || '';
-
-  function fmtAUDD(v) { return v != null ? (v/1_000_000).toFixed(2)+' AUDD' : '—'; }
-
-  function getCountdown() {
-    // Next 6am in UTC+10 (Sydney rough offset — cron uses proper timezone)
-    const now    = new Date();
-    const sydney = new Date(now.toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }));
-    const next   = new Date(sydney);
-    next.setHours(6, 0, 0, 0);
-    if (next <= sydney) next.setDate(next.getDate() + 1);
-    const diff = next - sydney;
-    const h = Math.floor(diff / 3_600_000);
-    const m = Math.floor((diff % 3_600_000) / 60_000);
-    const s = Math.floor((diff % 60_000) / 1000);
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  function fmt(v) { return v!=null?(v/1e6).toFixed(2):'—'; }
+  function nextRelease() {
+    const now=new Date(),next=new Date();
+    next.setUTCHours(6,0,0,0);
+    if(next<=now) next.setUTCDate(next.getUTCDate()+1);
+    const d=next-now,h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000);
+    return `${h}h ${m}m`;
   }
 
-  async function loadDashboard() {
+  async function load() {
+    document.getElementById('s-release').textContent = nextRelease();
     try {
       const { merchants } = await api.merchants.list();
-      const active = merchants.filter(m => m.is_active);
-      document.getElementById('stat-merchants').textContent = active.length;
-
-      if (!active.length) {
-        document.getElementById('merchant-tbody').innerHTML =
-          `<tr><td colspan="6"><div class="empty-state">
-            <div class="empty-state-icon">◈</div>
-            <h3>No merchants yet</h3>
-            <p>Go to <a href="/pages/developer/merchants.html">Merchants</a> to register</p>
-          </div></td></tr>`;
-        return;
-      }
+      const active = merchants.filter(m=>m.is_active);
+      document.getElementById('s-merchants').textContent = active.length;
 
       const escrows = await Promise.all(
-        active.slice(0, 20).map(m =>
-          api.escrow.get(m.merchant_id).catch(() => ({ pendingBalance: 0, totalPayments: 0 }))
-        )
+        active.slice(0,10).map(m=>api.escrow.get(m.merchant_id).catch(()=>({pendingBalance:0,totalPayments:0})))
       );
 
-      const totalPending  = escrows.reduce((s, e) => s + (e.pendingBalance  || 0), 0);
-      const totalPayments = escrows.reduce((s, e) => s + (e.totalPayments   || 0), 0);
-      document.getElementById('stat-balance').textContent  = fmtAUDD(totalPending);
-      document.getElementById('stat-payments').textContent = totalPayments;
+      const totalPending   = escrows.reduce((s,e)=>s+(e.pendingBalance||0),0);
+      const totalPayments  = escrows.reduce((s,e)=>s+(e.totalPayments||0),0);
+      document.getElementById('s-pending').textContent  = fmt(totalPending);
+      document.getElementById('s-payments').textContent = totalPayments;
 
-      document.getElementById('merchant-tbody').innerHTML = active.map((m, i) => {
-        const e = escrows[i] || {};
+      const tbody = document.getElementById('m-tbody');
+      if (!active.length) {
+        tbody.innerHTML=`<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">◈</div><h3>No merchants yet</h3><p>Register in the <a href="/pages/developer/merchants.html">Merchants</a> page.</p></div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = active.map((m,i)=>{
+        const e=escrows[i]||{};
         return `<tr>
-          <td>
-            <div style="font-family:var(--font-mono);font-size:12px;">${m.merchant_id}</div>
-            <div style="font-size:12px;color:var(--text-muted);">${m.name || ''}</div>
-          </td>
+          <td style="font-family:var(--font-mono);font-size:12px;">${m.merchant_id}</td>
           <td><span class="badge badge-success">Active</span></td>
-          <td style="font-weight:500;color:${e.pendingBalance>0?'var(--teal)':'inherit'}">${fmtAUDD(e.pendingBalance)}</td>
-          <td>${e.totalPayments ?? '—'}</td>
-          <td style="font-size:12px;color:var(--text-muted);">${e.lastReleasedAt ? new Date(e.lastReleasedAt).toLocaleDateString() : 'Never'}</td>
-          <td>
-            <div style="display:flex;gap:6px;">
-              <a href="/pages/operator/paylink.html" class="btn btn-secondary" style="font-size:12px;padding:4px 8px;">Pay link</a>
-              <a href="/pages/operator/payments.html" class="btn btn-secondary" style="font-size:12px;padding:4px 8px;">History</a>
-            </div>
-          </td>
+          <td style="font-weight:600;color:var(--teal);">${fmt(e.pendingBalance)}</td>
+          <td>${e.totalPayments??'—'}</td>
+          <td style="font-size:12px;color:var(--text-muted);">${e.lastReleasedAt?new Date(e.lastReleasedAt).toLocaleDateString():'Never'}</td>
         </tr>`;
       }).join('');
-
-      // Show last cron result
-      try {
-        const { runs } = await fetch('/api/releases/cron-runs', {
-          headers: { Authorization: `Bearer ${JSON.parse(localStorage.getItem('settl_session')).access_token}` }
-        }).then(r => r.json());
-        if (runs?.length) {
-          const last = runs[0];
-          document.getElementById('last-release-card').style.display = 'block';
-          document.getElementById('last-release-content').innerHTML = `
-            <div style="display:flex;gap:16px;font-size:13px;flex-wrap:wrap;">
-              <div><span style="color:var(--text-muted);">Status</span>
-                <span class="badge ${last.status==='success'?'badge-success':'badge-error'}" style="margin-left:6px;">${last.status}</span></div>
-              <div><span style="color:var(--text-muted);">Ran at</span> ${new Date(last.ran_at).toLocaleString()}</div>
-              ${last.success!=null?`<div style="color:var(--teal);">✓ ${last.success} released</div>`:''}
-              ${last.skipped?`<div style="color:var(--text-muted);">⊘ ${last.skipped} skipped</div>`:''}
-              ${last.failed?`<div style="color:var(--coral);">✗ ${last.failed} failed</div>`:''}
-            </div>`;
-        }
-      } catch {}
-
-    } catch (err) {
-      toast.error('Dashboard load failed: ' + err.message);
-    }
+    } catch(err) { toast.error(err.message); }
   }
 
-  // Countdown timer — updates every second
-  function tickCountdown() {
-    document.getElementById('stat-release').textContent = getCountdown();
-  }
-  tickCountdown();
-  setInterval(tickCountdown, 1000);
-
-  // Realtime dot — indicates Supabase connection
-  // (full Supabase Realtime subscription added in Phase 4)
-  document.getElementById('realtime-dot').style.background = 'var(--teal)';
-
-  loadDashboard();
-  setInterval(loadDashboard, 60_000);
+  load();
+  setInterval(()=>{ document.getElementById('s-release').textContent=nextRelease(); },60000);
 </script>
 </body>
 </html>

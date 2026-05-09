@@ -1,16 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <title>SETTL</title>
-  <link rel="stylesheet" href="css/app.css"/>
-</head>
-<body>
-<script src="js/modules/auth.js"></script>
-<script>
-  window.location.href = auth.isLoggedIn()
-    ? '/pages/dashboard.html'
-    : '/pages/auth/login.html';
-</script>
-</body>
-</html>
+<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>SETTL</title></head>
+<body><script>
+  window.location.href = localStorage.getItem('settl_token')
+    ? '/pages/dashboard.html' : '/pages/auth/login.html';
+</script></body></html>

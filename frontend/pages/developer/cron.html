@@ -2,96 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>SETTL — Cron monitor</title>
-  <link rel="stylesheet" href="../../css/app.css"/>
+  <link rel="stylesheet" href="/css/app.css"/>
 </head>
 <body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
 <div class="app-shell">
   <nav class="sidebar" id="sidebar"></nav>
   <div class="main-content">
-
     <div class="topbar">
-      <span class="topbar-title">Cron monitor</span>
-      <div style="display:flex;gap:10px;align-items:center;">
-        <span class="badge badge-info">developer</span>
-        <button class="btn btn-secondary" style="font-size:13px;" onclick="refreshAll()">Refresh</button>
-      </div>
+      <div class="topbar-left"><button class="menu-btn" onclick="openSidebar()">☰</button><span class="topbar-title">Cron monitor</span></div>
+      <span class="badge badge-info">developer</span>
     </div>
-
     <div class="page-body">
 
-      <!-- Cron status card -->
-      <div class="card-grid" style="grid-template-columns:1fr 1fr 1fr;">
-        <div class="card">
-          <div class="card-title">Schedule</div>
-          <div class="card-value" id="cron-schedule" style="font-size:18px;font-family:var(--font-mono);">—</div>
-          <div class="card-sub">Australia/Sydney timezone</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Last run</div>
-          <div class="card-value" id="cron-last-run" style="font-size:18px;">—</div>
-          <div class="card-sub" id="cron-last-status">—</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Status</div>
-          <div id="cron-live-status" class="card-value" style="font-size:16px;">—</div>
-          <div class="card-sub">Current process state</div>
-        </div>
-      </div>
-
-      <!-- Manual trigger -->
-      <div class="card" style="margin-bottom:20px;">
-        <h2 style="font-size:16px;font-weight:500;margin-bottom:16px;">Manual release trigger</h2>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
-          Trigger a release run immediately without waiting for the 6am schedule.
-          Use this for testing or emergency releases.
-        </p>
-        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
-          <div class="form-group" style="margin-bottom:0;flex:1;min-width:200px;">
-            <label class="form-label">Merchant ID (optional)</label>
-            <select class="form-input" id="trigger-merchant">
-              <option value="">All active merchants</option>
-            </select>
-          </div>
-          <button class="btn btn-primary" id="trigger-btn" onclick="triggerRelease()">
-            ▶ Run release now
-          </button>
-        </div>
-        <div id="trigger-result" style="display:none;margin-top:14px;padding:12px;background:var(--bg);border-radius:var(--radius-sm);font-size:13px;font-family:var(--font-mono);border:1px solid var(--border);"></div>
-      </div>
-
-      <!-- Cron run history -->
       <div class="card">
-        <h2 style="font-size:16px;font-weight:500;margin-bottom:16px;">Run history</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Ran at</th><th>Status</th><th>Success</th><th>Skipped</th><th>Failed</th><th>Error</th></tr>
-            </thead>
-            <tbody id="cron-tbody">
-              <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-hint);">Loading…</td></tr>
-            </tbody>
-          </table>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div><div class="card-title">Next scheduled release</div><div class="card-value" id="next-cd">—</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-secondary" id="btn-all" onclick="triggerAll()">▶ Release all now</button>
+            <select class="form-input" id="sel-m" style="width:auto;min-width:160px;"></select>
+            <button class="btn btn-secondary" onclick="triggerOne()">Run one</button>
+          </div>
         </div>
+        <div id="trig-status" style="font-size:13px;color:var(--text-muted);margin-top:10px;display:none;"></div>
       </div>
 
-      <!-- Recent release logs -->
-      <div class="card" style="margin-top:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h2 style="font-size:16px;font-weight:500;">Recent release logs</h2>
-          <select class="form-input" id="release-filter-merchant" style="width:auto;font-size:13px;" onchange="loadReleaseLogs()">
-            <option value="">All merchants</option>
-          </select>
-        </div>
+      <div class="card">
+        <div class="card-title-row"><h2>Run history</h2><button class="btn btn-secondary btn-sm" onclick="loadLogs()">Refresh</button></div>
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr><th>Merchant</th><th>Gross</th><th>Fee (1.5%)</th><th>Net</th><th>Status</th><th>Tx</th><th>Released at</th></tr>
-            </thead>
-            <tbody id="release-tbody">
-              <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr>
-            </tbody>
+            <thead><tr><th>Started</th><th>By</th><th>Status</th><th>Released</th><th>Skipped</th><th>Failed</th><th>Summary</th></tr></thead>
+            <tbody id="cron-tbody"><tr><td colspan="7" style="text-align:center;padding:28px;color:var(--text-hint);">Loading…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -100,141 +43,79 @@
   </div>
 </div>
 
-<script src="../../js/modules/api.js"></script>
-<script src="../../js/modules/auth.js"></script>
-<script src="../../js/modules/toast.js"></script>
-<script src="../../js/modules/nav.js"></script>
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
 <script>
-  if (!auth.requireAuth()) throw new Error();
-  document.getElementById('sidebar').innerHTML = buildSidebar('developer');
+  if (!auth.requireAuth()) throw 0;
+  initSidebar('developer');
 
-  const EXPLORER = 'https://explorer.solana.com/tx/';
-  function fmtAUDD(v) { return v != null ? (v/1_000_000).toFixed(4)+' AUDD' : '—'; }
-  function shortKey(k) { return k ? k.slice(0,6)+'…'+k.slice(-4) : '—'; }
-
-  async function refreshAll() {
-    loadCronStatus();
-    loadCronRuns();
-    loadReleaseLogs();
+  function nextRelease() {
+    const now=new Date(),next=new Date(); next.setUTCHours(6,0,0,0);
+    if(next<=now) next.setUTCDate(next.getUTCDate()+1);
+    const d=next-now,h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000);
+    return `${h}h ${m}m`;
   }
 
-  async function loadCronStatus() {
-    try {
-      const s = await api.releases.cronStatus();
-      document.getElementById('cron-schedule').textContent = s.schedule;
-      document.getElementById('cron-last-run').textContent = s.lastRunAt
-        ? new Date(s.lastRunAt).toLocaleString() : 'Never';
-      document.getElementById('cron-last-status').textContent = s.lastRunStatus;
-      const badge = s.isRunning
-        ? '<span class="badge badge-pending">Running…</span>'
-        : s.lastRunStatus === 'success'
-          ? '<span class="badge badge-success">Healthy</span>'
-          : s.lastRunStatus === 'failed'
-            ? '<span class="badge badge-error">Failed</span>'
-            : '<span class="badge badge-info">Idle</span>';
-      document.getElementById('cron-live-status').innerHTML = badge;
-    } catch (err) {
-      document.getElementById('cron-live-status').textContent = 'Backend offline';
-    }
+  async function init() {
+    document.getElementById('next-cd').textContent = nextRelease();
+    const { merchants } = await api.merchants.list().catch(()=>({merchants:[]}));
+    const sel = document.getElementById('sel-m');
+    sel.innerHTML = '<option value="">Select merchant…</option>' +
+      merchants.filter(m=>m.is_active).map(m=>`<option value="${m.merchant_id}">${m.merchant_id}</option>`).join('');
+    loadLogs();
+    setInterval(()=>document.getElementById('next-cd').textContent=nextRelease(),60000);
   }
 
-  async function loadCronRuns() {
+  async function loadLogs() {
     const tbody = document.getElementById('cron-tbody');
     try {
-      const { runs } = await api.releases.list({ limit: 20 });
-      if (!runs?.length) {
-        // Try cron-runs endpoint
-        const r = await fetch('/api/releases/cron-runs', {
-          headers: { Authorization: `Bearer ${JSON.parse(localStorage.getItem('settl_session')).access_token}` }
-        }).then(r => r.json());
-        const rows = r.runs || [];
-        if (!rows.length) {
-          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">No runs yet — schedule fires at 6am or use manual trigger above.</td></tr>`;
-          return;
-        }
-        tbody.innerHTML = rows.map(r => `
-          <tr>
-            <td style="font-size:13px;">${new Date(r.ran_at).toLocaleString()}</td>
-            <td><span class="badge ${r.status==='success'?'badge-success':r.status==='failed'?'badge-error':'badge-pending'}">${r.status}</span></td>
-            <td style="color:var(--teal);">${r.success ?? '—'}</td>
-            <td style="color:var(--text-muted);">${r.skipped ?? '—'}</td>
-            <td style="color:${r.failed>0?'var(--coral)':'inherit'}">${r.failed ?? '—'}</td>
-            <td style="font-size:12px;color:var(--coral);">${r.error || '—'}</td>
-          </tr>`).join('');
-      }
-    } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">—</td></tr>`;
-    }
-  }
-
-  async function loadReleaseLogs() {
-    const merchantId = document.getElementById('release-filter-merchant').value;
-    const tbody      = document.getElementById('release-tbody');
-    try {
-      const { releases } = await api.releases.list({ merchant_id: merchantId, limit: 30 });
-      if (!releases.length) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-hint);">No releases yet</td></tr>`;
+      const { logs } = await api.release.logs();
+      if (!logs.length) {
+        tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-hint);">No runs yet — trigger one above or wait for 6am UTC</td></tr>`;
         return;
       }
-      tbody.innerHTML = releases.map(r => `
-        <tr>
-          <td style="font-family:var(--font-mono);font-size:12px;">${r.merchant_id}</td>
-          <td>${fmtAUDD(r.gross)}</td>
-          <td style="color:var(--text-muted);">${fmtAUDD(r.fee)}</td>
-          <td style="color:var(--teal);font-weight:500;">${fmtAUDD(r.net)}</td>
-          <td><span class="badge ${r.status==='success'?'badge-success':r.status==='skipped'?'badge-info':r.status==='failed'?'badge-error':'badge-pending'}">${r.status}</span></td>
-          <td>${r.tx_signature ? `<a href="${EXPLORER}${r.tx_signature}?cluster=devnet" target="_blank" style="font-family:var(--font-mono);font-size:11px;">${shortKey(r.tx_signature)}</a>` : r.error ? `<span style="color:var(--coral);font-size:12px;">${r.error.slice(0,40)}</span>` : '—'}</td>
-          <td style="font-size:12px;color:var(--text-muted);">${new Date(r.released_at).toLocaleString()}</td>
-        </tr>`).join('');
-    } catch (err) {
-      toast.error('Failed to load release logs: ' + err.message);
-    }
+      tbody.innerHTML = logs.map(l=>`<tr>
+        <td style="font-size:12px;">${new Date(l.started_at).toLocaleString()}</td>
+        <td><span class="badge ${l.triggered_by==='cron'?'badge-info':'badge-pending'}">${l.triggered_by}</span></td>
+        <td><span class="badge ${l.status==='success'?'badge-success':l.status==='failed'?'badge-error':l.status==='running'?'badge-pending':'badge-info'}">${l.status}</span></td>
+        <td style="color:var(--teal);font-weight:600;">${l.released??'—'}</td>
+        <td style="color:var(--text-muted);">${l.skipped??'—'}</td>
+        <td style="color:${l.failed>0?'var(--coral)':'var(--text-muted)'};">${l.failed??'—'}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${l.summary||'—'}</td>
+      </tr>`).join('');
+    } catch(err) { toast.error(err.message); }
   }
 
-  async function triggerRelease() {
-    const merchantId = document.getElementById('trigger-merchant').value;
-    const btn        = document.getElementById('trigger-btn');
-    const resultEl   = document.getElementById('trigger-result');
-
-    btn.disabled = true;
-    btn.textContent = 'Running…';
-    resultEl.style.display = 'block';
-    resultEl.textContent   = 'Sending release instruction to Devnet…';
-
+  async function triggerAll() {
+    const btn=document.getElementById('btn-all');
+    const st=document.getElementById('trig-status');
+    btn.disabled=true; btn.textContent='⏳ Running…';
+    st.textContent='Sending release to Devnet for all merchants…'; st.style.display='';
     try {
-      const result = await api.releases.triggerManual(merchantId || undefined);
-      resultEl.textContent = JSON.stringify(result, null, 2);
-      toast.success('Release completed');
-      refreshAll();
-    } catch (err) {
-      resultEl.textContent = 'Error: ' + err.message;
-      toast.error(err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = '▶ Run release now';
-    }
+      const r=await api.release.all();
+      st.textContent=`Done — ${r.released} released, ${r.skipped} skipped, ${r.failed} failed`;
+      toast.success('Release complete');
+      loadLogs();
+    } catch(err) { st.textContent='Error: '+err.message; toast.error(err.message); }
+    finally { btn.disabled=false; btn.textContent='▶ Release all now'; }
   }
 
-  async function initMerchantSelects() {
+  async function triggerOne() {
+    const id=document.getElementById('sel-m').value;
+    if (!id) { toast.error('Select a merchant'); return; }
+    const st=document.getElementById('trig-status');
+    st.textContent=`Releasing ${id}…`; st.style.display='';
     try {
-      const { merchants } = await api.merchants.list();
-      const selects = ['trigger-merchant', 'release-filter-merchant'];
-      selects.forEach(selId => {
-        const sel = document.getElementById(selId);
-        merchants.filter(m => m.is_active).forEach(m => {
-          const opt = document.createElement('option');
-          opt.value = m.merchant_id;
-          opt.textContent = m.merchant_id + (m.name ? ` — ${m.name}` : '');
-          sel.appendChild(opt);
-        });
-      });
-    } catch {}
+      const r=await api.release.one(id);
+      st.textContent=r.skipped?`Skipped — ${r.reason}`:`Released ${id} successfully`;
+      toast.success(r.skipped?'Skipped: '+r.reason:'Release successful!');
+      loadLogs();
+    } catch(err) { st.textContent='Error: '+err.message; toast.error(err.message); }
   }
 
-  initMerchantSelects();
-  refreshAll();
-  // Auto-refresh cron status every 30s
-  setInterval(loadCronStatus, 30_000);
+  init();
 </script>
 </body>
 </html>

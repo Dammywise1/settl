@@ -1,20 +1,15 @@
-// ── Toast notifications ───────────────────────────────────
 (function () {
-  const container = document.createElement('div');
-  container.id = 'toast-container';
-  document.body.appendChild(container);
+  const c = document.createElement('div');
+  c.id = 'toast-container';
+  document.body.appendChild(c);
 
-  function show(message, type = 'info', duration = 3500) {
+  function show(msg, type = 'info', ms = 3500) {
     const t = document.createElement('div');
     t.className = `toast ${type}`;
-    t.textContent = message;
-    container.appendChild(t);
-    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, duration);
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 320); }, ms);
   }
 
-  window.toast = {
-    success: (msg) => show(msg, 'success'),
-    error:   (msg) => show(msg, 'error'),
-    info:    (msg) => show(msg, 'info'),
-  };
+  window.toast = { success: m => show(m,'success'), error: m => show(m,'error',5000), info: m => show(m,'info') };
 })();

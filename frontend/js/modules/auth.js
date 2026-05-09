@@ -1,46 +1,31 @@
-const SESSION_KEY = 'settl_session';
-const USER_KEY = 'settl_user';
+const KEY_TOKEN   = 'settl_token';
+const KEY_USER    = 'settl_user';
+const KEY_MODE    = 'settl_mode';
 
 const auth = {
-  getSession() {
-    try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
-  },
+  getToken()   { return localStorage.getItem(KEY_TOKEN); },
+  getUser()    { try { return JSON.parse(localStorage.getItem(KEY_USER)); } catch { return null; } },
+  getMode()    { return localStorage.getItem(KEY_MODE) || 'operator'; },
+  setMode(m)   { localStorage.setItem(KEY_MODE, m); },
 
-  getUser() {
-    try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; }
-  },
-
-  setSession(session, user) {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+  save(token, user) {
+    localStorage.setItem(KEY_TOKEN, token);
+    localStorage.setItem(KEY_USER, JSON.stringify(user));
   },
 
   clear() {
-    localStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem('settl_mode');
+    localStorage.removeItem(KEY_TOKEN);
+    localStorage.removeItem(KEY_USER);
+    localStorage.removeItem(KEY_MODE);
   },
 
-  isLoggedIn() {
-    const s = this.getSession();
-    if (!s?.token) return false;
-    if (s.expires_at && new Date(s.expires_at) < new Date()) {
-      this.clear();
-      return false;
-    }
-    return true;
-  },
+  isLoggedIn() { return !!this.getToken(); },
 
   requireAuth() {
-    if (!this.isLoggedIn()) {
-      window.location.href = '/pages/auth/login.html';
-      return false;
-    }
+    if (!this.isLoggedIn()) { window.location.href = '/pages/auth/login.html'; return false; }
     return true;
   },
 
-  getMode() { return localStorage.getItem('settl_mode') || 'operator'; },
-  setMode(mode) { localStorage.setItem('settl_mode', mode); },
   getRole() { return this.getUser()?.role || 'operator'; },
 };
 

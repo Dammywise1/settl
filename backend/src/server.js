@@ -1,56 +1,55 @@
-require('./config/env');
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+const express   = require('express');
+const cors      = require('cors');
+const helmet    = require('helmet');
+const morgan    = require('morgan');
 const rateLimit = require('express-rate-limit');
-const path = require('path');
+const path      = require('path');
 
-const customAuthMiddleware = require('./middleware/customAuth');
-const merchantRoutes = require('./routes/merchants');
-const escrowRoutes = require('./routes/escrow');
-const authRoutes = require('./routes/auth');
-const healthRoutes = require('./routes/health');
-const paymentRoutes = require('./routes/payments');
-const releaseRoutes = require('./routes/releases');
+const authMiddleware = require('./middleware/auth');
+const { startCron }  = require('./cron/dailyRelease');
 
-// Start cron job
-require('./cron/dailyRelease');
-
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 3000;
-
-app.set('trust proxy', 1);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
-// Serve frontend
+// Static frontend
 const frontendPath = path.join(__dirname, '../../frontend');
 app.use(express.static(frontendPath));
 
-// Rate limiting
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
-app.use('/api/', limiter);
+// Rate limit
+app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 150 }));
 
-// API Routes
-app.use('/api/health', healthRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/merchants', customAuthMiddleware, merchantRoutes);
-app.use('/api/escrow', customAuthMiddleware, escrowRoutes);
-app.use('/api/payments', paymentRoutes); // Public
-app.use('/api/releases', customAuthMiddleware, releaseRoutes);
+// Public routes (no auth)
+app.use('/api/health',   require('./routes/health'));
+app.use('/api/auth',     require('./routes/auth'));
 
-// Catch-all for frontend
-app.get('*', (req, res) => {
-  res.sendFile(path.join(frontendPath, 'index.html'));
+// Payments poll is public (customer-facing, no login)
+app.use('/api/payments/poll', require('./routes/payments'));
+
+// Protected routes
+app.use('/api/merchants', authMiddleware, require('./routes/merchants'));
+app.use('/api/escrow',    authMiddleware, require('./routes/escrow'));
+app.use('/api/payments',  authMiddleware, require('./routes/payments'));
+app.use('/api/release',   authMiddleware, require('./routes/release'));
+
+// Catch-all → frontend
+app.get('*', (req, res) => res.sendFile(path.join(frontendPath, 'index.html')));
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('[ERROR]', err.message);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
 app.listen(PORT, () => {
-  console.log(`[SETTL] Server running on http://localhost:${PORT}`);
-  console.log(`[SETTL] Custom auth enabled - no Supabase Auth`);
+  console.log(`\n[SETTL] ▶  http://localhost:${PORT}`);
+  console.log(`[SETTL] Program: ${process.env.SETTL_PROGRAM_ID}`);
+  startCron();
 });
 
 module.exports = app;

@@ -1,45 +1,27 @@
-const { PublicKey, SYSVAR_RENT_PUBKEY, SystemProgram } = require('@solana/web3.js');
+const { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } = require('@solana/web3.js');
 const { TOKEN_PROGRAM_ID, getAssociatedTokenAddress }  = require('@solana/spl-token');
-const {
-  getProgram, getKeypair,
-  getMerchantPDA, getEscrowPDA, getVaultPDA, getConfigPDA,
-  BN,
-} = require('../config/anchor');
+const { getProgram, getKeypair, getMerchantPDA, getEscrowPDA, getVaultPDA, getConfigPDA } = require('../config/anchor');
 
 const AUDD_MINT = () => new PublicKey(process.env.AUDD_MINT);
+const TREASURY  = () => new PublicKey(process.env.TREASURY_WALLET);
 
-// ── registerMerchant ──────────────────────────────────────
-// Calls the on-chain register_merchant instruction.
-// Only the backend authority signs — merchant does nothing.
 async function registerMerchant(merchantId, walletAddress) {
-  if (merchantId.length > 64) throw new Error('merchant_id must be 64 chars or fewer');
-
-  const program              = getProgram();
-  const authority            = getKeypair();
-  const walletPubkey         = new PublicKey(walletAddress);
-  const [merchantPDA]        = getMerchantPDA(merchantId);
+  const program       = getProgram();
+  const authority     = getKeypair();
+  const walletPubkey  = new PublicKey(walletAddress);
+  const [merchantPDA] = getMerchantPDA(merchantId);
 
   const tx = await program.methods
     .registerMerchant(merchantId, walletPubkey)
-    .accounts({
-      merchant:      merchantPDA,
-      authority:     authority.publicKey,
-      systemProgram: SystemProgram.programId,
-    })
-    .signers([authority])
-    .rpc();
+    .accounts({ merchant: merchantPDA, authority: authority.publicKey, systemProgram: SystemProgram.programId })
+    .signers([authority]).rpc();
 
-  console.log(`[contract] registerMerchant tx: ${tx}`);
   return { tx, merchantPDA: merchantPDA.toBase58() };
 }
 
-// ── initializeMerchantEscrow ──────────────────────────────
-// Creates the AUDD vault PDA for a merchant.
-// Called immediately after registerMerchant.
 async function initializeMerchantEscrow(merchantId) {
   const program       = getProgram();
   const authority     = getKeypair();
-  const auddMint      = AUDD_MINT();
   const [merchantPDA] = getMerchantPDA(merchantId);
   const [escrowPDA]   = getEscrowPDA(merchantId);
   const [vaultPDA]    = getVaultPDA(merchantId);
@@ -47,143 +29,107 @@ async function initializeMerchantEscrow(merchantId) {
   const tx = await program.methods
     .initializeMerchantEscrow(merchantId)
     .accounts({
-      merchant:      merchantPDA,
-      escrow:        escrowPDA,
-      vault:         vaultPDA,
-      auddMint:      auddMint,
-      authority:     authority.publicKey,
-      tokenProgram:  TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-      rent:          SYSVAR_RENT_PUBKEY,
+      merchant: merchantPDA, escrow: escrowPDA, vault: vaultPDA,
+      auddMint: AUDD_MINT(), authority: authority.publicKey,
+      tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
+      rent: SYSVAR_RENT_PUBKEY,
     })
-    .signers([authority])
-    .rpc();
+    .signers([authority]).rpc();
 
-  console.log(`[contract] initializeMerchantEscrow tx: ${tx}`);
   return { tx, escrowPDA: escrowPDA.toBase58(), vaultPDA: vaultPDA.toBase58() };
 }
 
-// ── fetchMerchantOnChain ──────────────────────────────────
-// Reads the MerchantAccount from the chain.
 async function fetchMerchantOnChain(merchantId) {
-  const program       = getProgram();
-  const [merchantPDA] = getMerchantPDA(merchantId);
+  const program = getProgram();
+  const [pda]   = getMerchantPDA(merchantId);
   try {
-    const account = await program.account.merchantAccount.fetch(merchantPDA);
+    const a = await program.account.merchantAccount.fetch(pda);
     return {
-      merchantId:    account.merchantId,
-      wallet:        account.wallet.toBase58(),
-      isActive:      account.isActive,
-      registeredAt:  account.registeredAt.toNumber(),
-      totalReleased: account.totalReleased.toNumber(),
-      totalFeesPaid: account.totalFeesPaid.toNumber(),
-      pendingWallet: account.pendingWallet?.toBase58() || null,
-      walletUpdateAt:account.walletUpdateAt?.toNumber() || null,
+      wallet: a.wallet.toBase58(), isActive: a.isActive,
+      registeredAt: a.registeredAt.toNumber(),
+      totalReleased: a.totalReleased.toNumber(),
+      totalFeesPaid: a.totalFeesPaid.toNumber(),
+      pendingWallet: a.pendingWallet?.toBase58() || null,
+      walletUpdateAt: a.walletUpdateAt?.toNumber() || null,
     };
-  } catch (e) {
-    return null;
-  }
+  } catch { return null; }
 }
 
-// ── fetchEscrowOnChain ────────────────────────────────────
-// Reads the EscrowAccount from the chain.
 async function fetchEscrowOnChain(merchantId) {
-  const program      = getProgram();
-  const [escrowPDA]  = getEscrowPDA(merchantId);
+  const program = getProgram();
+  const [pda]   = getEscrowPDA(merchantId);
   try {
-    const account = await program.account.escrowAccount.fetch(escrowPDA);
+    const a = await program.account.escrowAccount.fetch(pda);
     return {
-      merchantId:     account.merchantId,
-      merchantWallet: account.merchantWallet.toBase58(),
-      pendingBalance: account.pendingBalance.toNumber(),
-      totalPayments:  account.totalPayments.toNumber(),
-      lastReleasedAt: account.lastReleasedAt.toNumber(),
+      merchantWallet: a.merchantWallet.toBase58(),
+      pendingBalance: a.pendingBalance.toNumber(),
+      totalPayments: a.totalPayments.toNumber(),
+      lastReleasedAt: a.lastReleasedAt.toNumber(),
     };
-  } catch (e) {
-    return null;
-  }
+  } catch { return null; }
 }
 
-// ── requestWalletUpdate ───────────────────────────────────
-// Stages a wallet change with a 24-hour security delay.
-async function requestWalletUpdate(merchantId, newWalletAddress) {
-  const program       = getProgram();
-  const authority     = getKeypair();
-  const [merchantPDA] = getMerchantPDA(merchantId);
-  const newWallet     = new PublicKey(newWalletAddress);
+async function releaseMerchant(merchantId) {
+  const program   = getProgram();
+  const authority = getKeypair();
+  const auddMint  = AUDD_MINT();
+  const treasury  = TREASURY();
 
-  const tx = await program.methods
-    .requestWalletUpdate(newWallet)
-    .accounts({ merchant: merchantPDA, authority: authority.publicKey })
-    .signers([authority])
-    .rpc();
-
-  console.log(`[contract] requestWalletUpdate tx: ${tx}`);
-  return { tx };
-}
-
-// ── confirmWalletUpdate ───────────────────────────────────
-// Confirms a pending wallet change after 24h delay.
-async function confirmWalletUpdate(merchantId) {
-  const program       = getProgram();
-  const authority     = getKeypair();
-  const [merchantPDA] = getMerchantPDA(merchantId);
-
-  const tx = await program.methods
-    .confirmWalletUpdate()
-    .accounts({ merchant: merchantPDA, authority: authority.publicKey })
-    .signers([authority])
-    .rpc();
-
-  console.log(`[contract] confirmWalletUpdate tx: ${tx}`);
-  return { tx };
-}
-
-// ── updateEscrowWallet ────────────────────────────────────
-// Syncs the escrow's stored wallet after a confirmed update.
-async function updateEscrowWallet(merchantId) {
-  const program       = getProgram();
-  const authority     = getKeypair();
+  const [configPDA]   = getConfigPDA();
   const [merchantPDA] = getMerchantPDA(merchantId);
   const [escrowPDA]   = getEscrowPDA(merchantId);
+  const [vaultPDA]    = getVaultPDA(merchantId);
+
+  const m = await program.account.merchantAccount.fetch(merchantPDA);
+  const merchantATA = await getAssociatedTokenAddress(auddMint, m.wallet);
+  const treasuryATA = await getAssociatedTokenAddress(auddMint, treasury);
 
   const tx = await program.methods
-    .updateEscrowWallet()
+    .release(merchantId)
     .accounts({
-      merchant:  merchantPDA,
-      escrow:    escrowPDA,
-      authority: authority.publicKey,
+      config: configPDA, merchant: merchantPDA, escrow: escrowPDA,
+      vault: vaultPDA, merchantAta: merchantATA, treasuryAta: treasuryATA,
+      authority: authority.publicKey, tokenProgram: TOKEN_PROGRAM_ID,
     })
-    .signers([authority])
-    .rpc();
+    .signers([authority]).rpc();
 
-  console.log(`[contract] updateEscrowWallet tx: ${tx}`);
-  return { tx };
+  return tx;
 }
 
-// ── deactivateMerchant ────────────────────────────────────
 async function deactivateMerchant(merchantId) {
-  const program       = getProgram();
-  const authority     = getKeypair();
-  const [merchantPDA] = getMerchantPDA(merchantId);
+  const program   = getProgram();
+  const authority = getKeypair();
+  const [pda]     = getMerchantPDA(merchantId);
+  const tx = await program.methods.deactivateMerchant()
+    .accounts({ merchant: pda, authority: authority.publicKey })
+    .signers([authority]).rpc();
+  return tx;
+}
 
-  const tx = await program.methods
-    .deactivateMerchant()
-    .accounts({ merchant: merchantPDA, authority: authority.publicKey })
-    .signers([authority])
-    .rpc();
+async function requestWalletUpdate(merchantId, newWallet) {
+  const program   = getProgram();
+  const authority = getKeypair();
+  const [pda]     = getMerchantPDA(merchantId);
+  const tx = await program.methods.requestWalletUpdate(new PublicKey(newWallet))
+    .accounts({ merchant: pda, authority: authority.publicKey })
+    .signers([authority]).rpc();
+  return tx;
+}
 
-  console.log(`[contract] deactivateMerchant tx: ${tx}`);
-  return { tx };
+async function confirmWalletUpdate(merchantId) {
+  const program   = getProgram();
+  const authority = getKeypair();
+  const [pda]     = getMerchantPDA(merchantId);
+  const tx = await program.methods.confirmWalletUpdate()
+    .accounts({ merchant: pda, authority: authority.publicKey })
+    .signers([authority]).rpc();
+  return tx;
 }
 
 module.exports = {
-  registerMerchant,
-  initializeMerchantEscrow,
-  fetchMerchantOnChain,
-  fetchEscrowOnChain,
-  requestWalletUpdate,
-  confirmWalletUpdate,
-  updateEscrowWallet,
-  deactivateMerchant,
+  registerMerchant, initializeMerchantEscrow,
+  fetchMerchantOnChain, fetchEscrowOnChain,
+  releaseMerchant, deactivateMerchant,
+  requestWalletUpdate, confirmWalletUpdate,
+  AUDD_MINT, TREASURY,
 };

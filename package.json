@@ -3,11 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev":     "cd backend && yarn dev",
-    "start":   "cd backend && yarn start",
-    "install": "cd backend && yarn install"
+    "dev":   "cd backend && yarn dev",
+    "start": "cd backend && yarn start",
+    "setup": "cd backend && yarn install"
   },
-  "engines": {
-    "node": ">=18"
-  }
+  "engines": { "node": ">=18" }
 }
