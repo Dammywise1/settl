@@ -1,4 +1,4 @@
-require('./config/env');
+require('../config/env');
 const { Connection, Keypair, PublicKey } = require('@solana/web3.js');
 const { AnchorProvider, Program, BN }   = require('@coral-xyz/anchor');
 const fs   = require('fs');

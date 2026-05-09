@@ -1,9 +1,11 @@
-// ── SETTL API client — Phase 3 ────────────────────────────
-const API_BASE = '';   // same origin — served by Express
+const API_BASE = '';
 
 function getToken() {
-  try { return JSON.parse(localStorage.getItem('settl_session'))?.access_token; }
-  catch { return null; }
+  try { 
+    return JSON.parse(localStorage.getItem('settl_session'))?.token;
+  } catch { 
+    return null; 
+  }
 }
 
 async function request(path, options = {}) {
@@ -14,7 +16,7 @@ async function request(path, options = {}) {
     ...options.headers,
   };
 
-  const res  = await fetch(`${API_BASE}/api${path}`, { ...options, headers });
+  const res = await fetch(`${API_BASE}/api${path}`, { ...options, headers });
   const data = await res.json();
 
   if (!res.ok) {
@@ -26,47 +28,45 @@ async function request(path, options = {}) {
 }
 
 const api = {
-  get:    (path, opts)       => request(path, { ...opts, method: 'GET' }),
-  post:   (path, body, opts) => request(path, { ...opts, method: 'POST',   body: JSON.stringify(body) }),
-  patch:  (path, body, opts) => request(path, { ...opts, method: 'PATCH',  body: JSON.stringify(body) }),
-  delete: (path, opts)       => request(path, { ...opts, method: 'DELETE' }),
+  get: (path, opts) => request(path, { ...opts, method: 'GET' }),
+  post: (path, body, opts) => request(path, { ...opts, method: 'POST', body: JSON.stringify(body) }),
+  patch: (path, body, opts) => request(path, { ...opts, method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (path, opts) => request(path, { ...opts, method: 'DELETE' }),
 
   auth: {
-    register:       (email, password, full_name) => api.post('/auth/register', { email, password, full_name }),
-    login:          (email, password)            => api.post('/auth/login',    { email, password }),
-    logout:         ()                           => api.post('/auth/logout',   {}),
-    me:             ()                           => api.get('/auth/me'),
-    forgotPassword: (email)                      => api.post('/auth/forgot-password', { email }),
-    resetPassword:  (new_password)               => api.post('/auth/reset-password',  { new_password }),
+    register: (email, password, full_name) => api.post('/auth/register', { email, password, full_name }),
+    login: (email, password) => api.post('/auth/login', { email, password }),
+    logout: () => api.post('/auth/logout', {}),
+    me: () => api.get('/auth/me'),
   },
 
   merchants: {
-    list:                ()              => api.get('/merchants'),
-    get:                 (id)            => api.get(`/merchants/${id}`),
-    create:              (body)          => api.post('/merchants', body),
-    getChainState:       (id)            => api.get(`/merchants/${id}/chain`),
-    deactivate:          (id)            => api.post(`/merchants/${id}/deactivate`, {}),
-    sync:                (id)            => api.post(`/merchants/${id}/sync`, {}),
+    list: () => api.get('/merchants'),
+    get: (id) => api.get(`/merchants/${id}`),
+    create: (body) => api.post('/merchants', body),
+    getChainState: (id) => api.get(`/merchants/${id}/chain`),
+    deactivate: (id) => api.post(`/merchants/${id}/deactivate`, {}),
+    sync: (id) => api.post(`/merchants/${id}/sync`, {}),
     requestWalletUpdate: (id, newWallet) => api.post(`/merchants/${id}/wallet-update/request`, { new_wallet: newWallet }),
-    confirmWalletUpdate: (id)            => api.post(`/merchants/${id}/wallet-update/confirm`, {}),
+    confirmWalletUpdate: (id) => api.post(`/merchants/${id}/wallet-update/confirm`, {}),
   },
 
   escrow: {
-    get:     (merchantId)           => api.get(`/escrow/${merchantId}`),
-    history: (merchantId, params)   => api.get(`/escrow/${merchantId}/history?${new URLSearchParams(params || {})}`),
+    get: (merchantId) => api.get(`/escrow/${merchantId}`),
+    history: (merchantId, params) => api.get(`/escrow/${merchantId}/history?${new URLSearchParams(params || {})}`),
   },
 
   payments: {
-    createLink:      (body)      => api.post('/payments/link', body),
-    getLink:         (token)     => api.get(`/payments/link/${token}`),
-    confirmDeposit:  (body)      => api.post('/payments/confirm', body),
-    listForMerchant: (id, p)     => api.get(`/payments/merchant/${id}?${new URLSearchParams(p || {})}`),
+    createLink: (body) => api.post('/payments/link', body),
+    getLink: (token) => api.get(`/payments/link/${token}`),
+    confirmDeposit: (body) => api.post('/payments/confirm', body),
+    listForMerchant: (id, params) => api.get(`/payments/merchant/${id}?${new URLSearchParams(params || {})}`),
   },
 
   releases: {
-    list:          (params)      => api.get(`/releases?${new URLSearchParams(params || {})}`),
-    triggerManual: (merchantId)  => api.post('/releases/trigger', { merchant_id: merchantId }),
-    cronStatus:    ()            => api.get('/releases/cron-status'),
+    list: (params) => api.get(`/releases?${new URLSearchParams(params || {})}`),
+    triggerManual: (merchantId) => api.post('/releases/trigger', { merchant_id: merchantId }),
+    cronStatus: () => api.get('/releases/cron-status'),
   },
 };
 
