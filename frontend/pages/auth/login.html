@@ -1,40 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SETTL — Sign in</title>
-  <link rel="stylesheet" href="../../css/app.css" />
+  <link rel="stylesheet" href="../../css/app.css"/>
 </head>
 <body>
 <div class="auth-wrap">
   <div class="auth-card">
     <div class="auth-logo">SETTL</div>
-    <div class="auth-sub">Payment gateway · Sign in to continue</div>
+    <div class="auth-sub">Payment gateway — sign in to continue</div>
 
-    <div id="form-view">
+    <div id="login-view">
       <div class="form-group">
-        <label class="form-label" for="email">Email address</label>
-        <input class="form-input" type="email" id="email" placeholder="you@example.com" autocomplete="email" />
+        <label class="form-label">Email</label>
+        <input class="form-input" id="email" type="email" placeholder="you@example.com" autocomplete="email"/>
       </div>
-      <button class="btn btn-primary" style="width:100%;" id="login-btn" onclick="sendMagicLink()">
-        Send magic link
-      </button>
-      <p class="form-hint" style="margin-top:14px; text-align:center;">
-        We'll email you a one-click sign-in link. No password needed.
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div style="position:relative;">
+          <input class="form-input" id="password" type="password" placeholder="••••••••" autocomplete="current-password" style="padding-right:44px;"/>
+          <button onclick="togglePw()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;" id="pw-toggle">👁</button>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
+        <a href="#" onclick="showForgot()" style="font-size:13px;color:var(--text-muted);">Forgot password?</a>
+      </div>
+      <button class="btn btn-primary" style="width:100%;" id="login-btn" onclick="doLogin()">Sign in</button>
+      <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--text-muted);">
+        No account? <a href="register.html">Create one</a>
       </p>
     </div>
 
-    <div id="sent-view" style="display:none; text-align:center;">
-      <div style="font-size:32px; margin-bottom:12px;">✉</div>
-      <h3 style="margin-bottom:8px;">Check your email</h3>
-      <p style="color:var(--text-muted); font-size:14px;">
-        We sent a sign-in link to <strong id="sent-email"></strong>.<br/>
-        Click the link in the email to continue.
+    <div id="forgot-view" style="display:none;">
+      <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;">
+        Enter your email and we'll send a reset link.
       </p>
-      <button class="btn btn-secondary" style="margin-top:20px; width:100%;" onclick="resetForm()">
-        Use a different email
-      </button>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="forgot-email" type="email" placeholder="you@example.com"/>
+      </div>
+      <button class="btn btn-primary" style="width:100%;" onclick="doForgot()">Send reset link</button>
+      <button class="btn btn-secondary" style="width:100%;margin-top:10px;" onclick="showLogin()">Back to sign in</button>
     </div>
   </div>
 </div>
@@ -43,39 +51,53 @@
 <script src="../../js/modules/auth.js"></script>
 <script src="../../js/modules/toast.js"></script>
 <script>
-  // Already logged in → redirect
   if (auth.isLoggedIn()) window.location.href = '/pages/dashboard.html';
 
-  async function sendMagicLink() {
-    const email = document.getElementById('email').value.trim();
-    if (!email) { toast.error('Please enter your email'); return; }
+  function togglePw() {
+    const pw = document.getElementById('password');
+    pw.type  = pw.type === 'password' ? 'text' : 'password';
+  }
+  function showForgot() {
+    document.getElementById('login-view').style.display  = 'none';
+    document.getElementById('forgot-view').style.display = 'block';
+  }
+  function showLogin() {
+    document.getElementById('forgot-view').style.display = 'none';
+    document.getElementById('login-view').style.display  = 'block';
+  }
+
+  async function doLogin() {
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    if (!email || !password) { toast.error('Email and password are required'); return; }
 
     const btn = document.getElementById('login-btn');
-    btn.disabled = true;
-    btn.textContent = 'Sending...';
+    btn.disabled = true; btn.textContent = 'Signing in…';
 
     try {
-      await api.auth.login(email);
-      document.getElementById('sent-email').textContent = email;
-      document.getElementById('form-view').style.display = 'none';
-      document.getElementById('sent-view').style.display = 'block';
+      const { session, profile } = await api.auth.login(email, password);
+      auth.setSession(session, profile);
+      window.location.href = '/pages/dashboard.html';
     } catch (err) {
-      toast.error(err.message || 'Failed to send magic link');
-      btn.disabled = false;
-      btn.textContent = 'Send magic link';
+      toast.error(err.message || 'Invalid email or password');
+      btn.disabled = false; btn.textContent = 'Sign in';
     }
   }
 
-  function resetForm() {
-    document.getElementById('form-view').style.display = 'block';
-    document.getElementById('sent-view').style.display = 'none';
-    const btn = document.getElementById('login-btn');
-    btn.disabled = false;
-    btn.textContent = 'Send magic link';
+  async function doForgot() {
+    const email = document.getElementById('forgot-email').value.trim();
+    if (!email) { toast.error('Enter your email'); return; }
+    try {
+      await api.auth.forgotPassword(email);
+      toast.success('Reset link sent — check your email');
+      showLogin();
+    } catch (err) {
+      toast.error(err.message);
+    }
   }
 
-  document.getElementById('email').addEventListener('keydown', e => {
-    if (e.key === 'Enter') sendMagicLink();
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
   });
 </script>
 </body>

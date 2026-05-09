@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SETTL — Pay</title>
+  <link rel="stylesheet" href="../css/app.css"/>
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card" style="max-width:480px;">
+
+    <div id="loading-view">
+      <div class="auth-logo">SETTL</div>
+      <p style="color:var(--text-muted);margin-top:8px;">Loading payment details…</p>
+    </div>
+
+    <div id="payment-view" style="display:none;">
+      <div class="auth-logo">SETTL</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+        <span class="badge badge-success">Secure payment</span>
+        <span style="font-size:13px;color:var(--text-muted);">AUDD stablecoin · Solana</span>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;margin-bottom:20px;">
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:4px;">Paying</div>
+        <div style="font-size:20px;font-weight:600;" id="pay-merchant">—</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:6px;" id="pay-desc"></div>
+      </div>
+
+      <div id="fixed-amount-section" style="display:none;">
+        <div style="text-align:center;margin-bottom:20px;">
+          <div style="font-size:13px;color:var(--text-muted);">Amount due</div>
+          <div style="font-size:36px;font-weight:700;color:var(--brand);" id="pay-amount">—</div>
+          <div style="font-size:13px;color:var(--text-muted);">AUDD</div>
+        </div>
+      </div>
+
+      <div id="open-amount-section" style="display:none;margin-bottom:20px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Amount (AUDD)</label>
+          <input class="form-input" id="custom-amount" type="number" step="0.000001" min="0.000001" placeholder="Enter amount"/>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Your wallet address</label>
+        <input class="form-input" id="customer-wallet" placeholder="Your Solana public key"/>
+        <div class="form-hint">Provide your wallet so we can record your payment. Not required to transact.</div>
+      </div>
+
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-bottom:20px;font-size:13px;border:1px solid var(--border);">
+        <div style="font-weight:500;margin-bottom:6px;">How to pay</div>
+        <div style="color:var(--text-muted);line-height:1.6;">
+          1. Copy the merchant's vault address below<br/>
+          2. Send AUDD from your Solana wallet<br/>
+          3. Paste your transaction ID to confirm
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label class="form-label">Merchant vault address</label>
+        <div style="display:flex;gap:8px;">
+          <input class="form-input" id="vault-addr" readonly style="font-family:var(--font-mono);font-size:12px;flex:1;"/>
+          <button class="btn btn-secondary" onclick="copyVault()">Copy</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Transaction signature (after sending)</label>
+        <input class="form-input" id="tx-sig" placeholder="Paste your Solana tx signature here"/>
+      </div>
+
+      <button class="btn btn-primary" style="width:100%;" id="confirm-btn" onclick="confirmPayment()">
+        Confirm payment
+      </button>
+
+      <div id="expire-notice" style="text-align:center;margin-top:12px;font-size:12px;color:var(--text-muted);"></div>
+    </div>
+
+    <div id="success-view" style="display:none;text-align:center;">
+      <div style="font-size:48px;margin-bottom:16px;">✓</div>
+      <h2 style="margin-bottom:8px;">Payment confirmed!</h2>
+      <p style="color:var(--text-muted);font-size:14px;">
+        Your payment has been received and is held in escrow.<br/>
+        It will be released to the merchant at 6am.
+      </p>
+      <div id="success-tx" style="margin-top:16px;font-family:var(--font-mono);font-size:12px;color:var(--text-muted);"></div>
+    </div>
+
+    <div id="error-view" style="display:none;text-align:center;">
+      <div style="font-size:48px;margin-bottom:16px;">✗</div>
+      <h2 style="margin-bottom:8px;" id="error-title">Link not found</h2>
+      <p style="color:var(--text-muted);font-size:14px;" id="error-msg"></p>
+    </div>
+
+  </div>
+</div>
+
+<script src="../js/modules/api.js"></script>
+<script src="../js/modules/toast.js"></script>
+<script>
+  const token   = new URLSearchParams(window.location.search).get('token');
+  let linkData  = null;
+  let vaultAddr = '';
+
+  function show(viewId) {
+    ['loading-view','payment-view','success-view','error-view'].forEach(id => {
+      document.getElementById(id).style.display = id === viewId ? 'block' : 'none';
+    });
+  }
+
+  async function init() {
+    if (!token) { showError('No payment token', 'This link is missing a payment token.'); return; }
+
+    try {
+      linkData = await api.payments.getLink(token);
+
+      document.getElementById('pay-merchant').textContent = linkData.merchants?.name || linkData.merchant_id;
+      document.getElementById('pay-desc').textContent     = linkData.description || '';
+
+      if (linkData.amount) {
+        document.getElementById('fixed-amount-section').style.display = 'block';
+        document.getElementById('pay-amount').textContent = (linkData.amount / 1_000_000).toFixed(6);
+      } else {
+        document.getElementById('open-amount-section').style.display = 'block';
+      }
+
+      // Load vault address
+      try {
+        const escrow = await api.escrow.get(linkData.merchant_id);
+        vaultAddr = escrow.vaultAddress || '';
+        document.getElementById('vault-addr').value = vaultAddr;
+      } catch {}
+
+      const expiresAt = new Date(linkData.expires_at);
+      document.getElementById('expire-notice').textContent =
+        `Link expires: ${expiresAt.toLocaleString()}`;
+
+      show('payment-view');
+    } catch (err) {
+      showError('Payment link unavailable', err.message);
+    }
+  }
+
+  async function confirmPayment() {
+    const txSig        = document.getElementById('tx-sig').value.trim();
+    const customerWall = document.getElementById('customer-wallet').value.trim();
+    let amount         = linkData.amount;
+
+    if (!amount) {
+      const custom = parseFloat(document.getElementById('custom-amount').value);
+      if (!custom || custom <= 0) { toast.error('Enter a valid amount'); return; }
+      amount = Math.round(custom * 1_000_000);
+    }
+
+    if (!txSig) { toast.error('Paste your transaction signature'); return; }
+
+    const btn = document.getElementById('confirm-btn');
+    btn.disabled = true; btn.textContent = 'Confirming…';
+
+    try {
+      await api.payments.confirmDeposit({
+        token,
+        tx_signature:    txSig,
+        amount,
+        customer_wallet: customerWall || undefined,
+      });
+
+      document.getElementById('success-tx').textContent =
+        `Tx: ${txSig.slice(0,20)}…`;
+      show('success-view');
+    } catch (err) {
+      toast.error(err.message);
+      btn.disabled = false; btn.textContent = 'Confirm payment';
+    }
+  }
+
+  function copyVault() {
+    navigator.clipboard.writeText(vaultAddr).then(() => toast.success('Vault address copied!'));
+  }
+
+  function showError(title, msg) {
+    document.getElementById('error-title').textContent = title;
+    document.getElementById('error-msg').textContent   = msg;
+    show('error-view');
+  }
+
+  init();
+</script>
+</body>
+</html>

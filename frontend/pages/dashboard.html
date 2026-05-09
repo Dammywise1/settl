@@ -12,29 +12,31 @@
   <div class="main-content">
 
     <div class="topbar">
-      <span class="topbar-title" id="page-title">Overview</span>
+      <span class="topbar-title">Overview</span>
       <div style="display:flex;align-items:center;gap:12px;">
-        <span class="badge badge-info" id="mode-badge">loading</span>
+        <span id="realtime-dot" style="width:8px;height:8px;border-radius:50%;background:var(--border);display:inline-block;" title="Realtime"></span>
+        <span class="badge badge-info" id="mode-badge">—</span>
         <span id="user-email" style="font-size:13px;color:var(--text-muted);"></span>
       </div>
     </div>
 
     <div class="page-body">
+
       <div class="card-grid">
         <div class="card">
           <div class="card-title">Total pending</div>
           <div class="card-value" id="stat-balance">—</div>
-          <div class="card-sub">AUDD across all escrows</div>
+          <div class="card-sub">AUDD in escrow</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Next release</div>
+          <div class="card-value" id="stat-release" style="font-size:22px;">—</div>
+          <div class="card-sub">6am daily · Australia/Sydney</div>
         </div>
         <div class="card">
           <div class="card-title">Total payments</div>
           <div class="card-value" id="stat-payments">—</div>
-          <div class="card-sub">All time</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Next release</div>
-          <div class="card-value" id="stat-release">—</div>
-          <div class="card-sub">Automatic daily at 6am</div>
+          <div class="card-sub">All time deposits</div>
         </div>
         <div class="card">
           <div class="card-title">Active merchants</div>
@@ -43,24 +45,38 @@
         </div>
       </div>
 
+      <!-- Last release result -->
+      <div class="card" id="last-release-card" style="display:none;margin-bottom:16px;">
+        <h2 style="font-size:14px;font-weight:500;color:var(--text-muted);margin-bottom:10px;">Last release run</h2>
+        <div id="last-release-content"></div>
+      </div>
+
+      <!-- Merchant overview table -->
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h2 style="font-size:16px;font-weight:500;">Merchants overview</h2>
-          <a href="/pages/developer/merchants.html" class="btn btn-secondary" style="font-size:13px;">View all</a>
+          <h2 style="font-size:16px;font-weight:500;">Merchant balances</h2>
+          <button class="btn btn-secondary" style="font-size:13px;" onclick="loadDashboard()">Refresh</button>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Merchant ID</th><th>Status</th><th>Pending balance</th><th>Total payments</th><th>Last released</th></tr>
+              <tr>
+                <th>Merchant</th>
+                <th>Status</th>
+                <th>Pending balance</th>
+                <th>Total payments</th>
+                <th>Last released</th>
+                <th>Actions</th>
+              </tr>
             </thead>
-            <tbody id="merchant-overview-tbody">
-              <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-hint);">Loading…</td></tr>
+            <tbody id="merchant-tbody">
+              <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-hint);">Loading…</td></tr>
             </tbody>
           </table>
         </div>
       </div>
-    </div>
 
+    </div>
   </div>
 </div>
 
@@ -75,74 +91,110 @@
   const profile = auth.getProfile();
 
   document.getElementById('sidebar').innerHTML = buildSidebar(mode);
-  document.getElementById('mode-badge').textContent = mode;
+  document.getElementById('mode-badge').textContent  = mode;
   document.getElementById('user-email').textContent  = profile?.email || '';
 
-  function fmtAUDD(v) { return v != null ? (v/1_000_000).toFixed(2) + ' AUDD' : '—'; }
+  function fmtAUDD(v) { return v != null ? (v/1_000_000).toFixed(2)+' AUDD' : '—'; }
 
-  function getNextReleaseTime() {
-    const now   = new Date();
-    const next  = new Date();
+  function getCountdown() {
+    // Next 6am in UTC+10 (Sydney rough offset — cron uses proper timezone)
+    const now    = new Date();
+    const sydney = new Date(now.toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }));
+    const next   = new Date(sydney);
     next.setHours(6, 0, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1);
-    const diff  = next - now;
-    const h     = Math.floor(diff / 3_600_000);
-    const m     = Math.floor((diff % 3_600_000) / 60_000);
-    return `${h}h ${m}m`;
+    if (next <= sydney) next.setDate(next.getDate() + 1);
+    const diff = next - sydney;
+    const h = Math.floor(diff / 3_600_000);
+    const m = Math.floor((diff % 3_600_000) / 60_000);
+    const s = Math.floor((diff % 60_000) / 1000);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   }
 
   async function loadDashboard() {
     try {
       const { merchants } = await api.merchants.list();
       const active = merchants.filter(m => m.is_active);
-
       document.getElementById('stat-merchants').textContent = active.length;
-      document.getElementById('stat-release').textContent   = getNextReleaseTime();
 
-      if (!merchants.length) {
-        document.getElementById('merchant-overview-tbody').innerHTML =
-          `<tr><td colspan="5"><div class="empty-state">
+      if (!active.length) {
+        document.getElementById('merchant-tbody').innerHTML =
+          `<tr><td colspan="6"><div class="empty-state">
             <div class="empty-state-icon">◈</div>
             <h3>No merchants yet</h3>
-            <p>Go to <a href="/pages/developer/merchants.html">Merchants</a> to register the first one</p>
+            <p>Go to <a href="/pages/developer/merchants.html">Merchants</a> to register</p>
           </div></td></tr>`;
         return;
       }
 
-      // Load escrow state for each merchant
       const escrows = await Promise.all(
-        active.slice(0, 10).map(m =>
-          api.escrow.get(m.merchant_id).catch(() => ({ merchantId: m.merchant_id, pendingBalance: 0, totalPayments: 0 }))
+        active.slice(0, 20).map(m =>
+          api.escrow.get(m.merchant_id).catch(() => ({ pendingBalance: 0, totalPayments: 0 }))
         )
       );
 
       const totalPending  = escrows.reduce((s, e) => s + (e.pendingBalance  || 0), 0);
       const totalPayments = escrows.reduce((s, e) => s + (e.totalPayments   || 0), 0);
+      document.getElementById('stat-balance').textContent  = fmtAUDD(totalPending);
+      document.getElementById('stat-payments').textContent = totalPayments;
 
-      document.getElementById('stat-balance').textContent   = fmtAUDD(totalPending);
-      document.getElementById('stat-payments').textContent  = totalPayments;
-
-      document.getElementById('merchant-overview-tbody').innerHTML = active.map((m, i) => {
+      document.getElementById('merchant-tbody').innerHTML = active.map((m, i) => {
         const e = escrows[i] || {};
         return `<tr>
-          <td style="font-family:var(--font-mono);font-size:12px;">${m.merchant_id}</td>
+          <td>
+            <div style="font-family:var(--font-mono);font-size:12px;">${m.merchant_id}</div>
+            <div style="font-size:12px;color:var(--text-muted);">${m.name || ''}</div>
+          </td>
           <td><span class="badge badge-success">Active</span></td>
-          <td style="font-weight:500;">${fmtAUDD(e.pendingBalance)}</td>
+          <td style="font-weight:500;color:${e.pendingBalance>0?'var(--teal)':'inherit'}">${fmtAUDD(e.pendingBalance)}</td>
           <td>${e.totalPayments ?? '—'}</td>
-          <td style="font-size:13px;color:var(--text-muted);">${e.lastReleasedAt ? new Date(e.lastReleasedAt).toLocaleDateString() : 'Never'}</td>
+          <td style="font-size:12px;color:var(--text-muted);">${e.lastReleasedAt ? new Date(e.lastReleasedAt).toLocaleDateString() : 'Never'}</td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <a href="/pages/operator/paylink.html" class="btn btn-secondary" style="font-size:12px;padding:4px 8px;">Pay link</a>
+              <a href="/pages/operator/payments.html" class="btn btn-secondary" style="font-size:12px;padding:4px 8px;">History</a>
+            </div>
+          </td>
         </tr>`;
       }).join('');
+
+      // Show last cron result
+      try {
+        const { runs } = await fetch('/api/releases/cron-runs', {
+          headers: { Authorization: `Bearer ${JSON.parse(localStorage.getItem('settl_session')).access_token}` }
+        }).then(r => r.json());
+        if (runs?.length) {
+          const last = runs[0];
+          document.getElementById('last-release-card').style.display = 'block';
+          document.getElementById('last-release-content').innerHTML = `
+            <div style="display:flex;gap:16px;font-size:13px;flex-wrap:wrap;">
+              <div><span style="color:var(--text-muted);">Status</span>
+                <span class="badge ${last.status==='success'?'badge-success':'badge-error'}" style="margin-left:6px;">${last.status}</span></div>
+              <div><span style="color:var(--text-muted);">Ran at</span> ${new Date(last.ran_at).toLocaleString()}</div>
+              ${last.success!=null?`<div style="color:var(--teal);">✓ ${last.success} released</div>`:''}
+              ${last.skipped?`<div style="color:var(--text-muted);">⊘ ${last.skipped} skipped</div>`:''}
+              ${last.failed?`<div style="color:var(--coral);">✗ ${last.failed} failed</div>`:''}
+            </div>`;
+        }
+      } catch {}
 
     } catch (err) {
       toast.error('Dashboard load failed: ' + err.message);
     }
   }
 
+  // Countdown timer — updates every second
+  function tickCountdown() {
+    document.getElementById('stat-release').textContent = getCountdown();
+  }
+  tickCountdown();
+  setInterval(tickCountdown, 1000);
+
+  // Realtime dot — indicates Supabase connection
+  // (full Supabase Realtime subscription added in Phase 4)
+  document.getElementById('realtime-dot').style.background = 'var(--teal)';
+
   loadDashboard();
-  // Refresh release countdown every minute
-  setInterval(() => {
-    document.getElementById('stat-release').textContent = getNextReleaseTime();
-  }, 60_000);
+  setInterval(loadDashboard, 60_000);
 </script>
 </body>
 </html>

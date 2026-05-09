@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SETTL — Payment link</title>
+  <link rel="stylesheet" href="../../css/app.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+
+    <div class="topbar">
+      <span class="topbar-title">Payment links</span>
+      <span class="badge badge-success">operator</span>
+    </div>
+
+    <div class="page-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+
+        <!-- Generator form -->
+        <div class="card">
+          <h2 style="font-size:16px;font-weight:500;margin-bottom:18px;">Generate payment link</h2>
+
+          <div class="form-group">
+            <label class="form-label">Amount (AUDD)</label>
+            <input class="form-input" id="f-amount" type="number" step="0.000001" min="0" placeholder="Leave blank for open amount"/>
+            <div class="form-hint">Customer enters any amount if left blank.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <input class="form-input" id="f-desc" placeholder="Invoice #001 — Website design"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Expires in (hours)</label>
+            <select class="form-input" id="f-expires">
+              <option value="1">1 hour</option>
+              <option value="6">6 hours</option>
+              <option value="24" selected>24 hours</option>
+              <option value="72">3 days</option>
+              <option value="168">7 days</option>
+              <option value="720">30 days</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%;" id="gen-btn" onclick="generateLink()">Generate link</button>
+        </div>
+
+        <!-- Generated link display -->
+        <div class="card" id="result-card" style="display:none;">
+          <h2 style="font-size:16px;font-weight:500;margin-bottom:16px;">Payment link ready</h2>
+
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:16px;">
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Share this link with your customer</div>
+            <div id="result-link" style="font-family:var(--font-mono);font-size:13px;word-break:break-all;"></div>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="copyLink()">Copy link</button>
+            <button class="btn btn-secondary" style="flex:1;" onclick="showQR()">Show QR</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+            <div style="color:var(--text-muted);">Amount</div>
+            <div id="result-amount" style="font-weight:500;"></div>
+            <div style="color:var(--text-muted);">Description</div>
+            <div id="result-desc"></div>
+            <div style="color:var(--text-muted);">Expires at</div>
+            <div id="result-expires" style="font-size:12px;"></div>
+          </div>
+
+          <!-- QR placeholder -->
+          <div id="qr-area" style="display:none;margin-top:16px;text-align:center;padding:20px;background:var(--bg);border-radius:var(--radius-sm);">
+            <div style="color:var(--text-muted);font-size:13px;">QR code generation coming in Phase 4</div>
+          </div>
+
+          <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="resetForm()">Generate another</button>
+        </div>
+
+      </div>
+
+      <!-- Active links table -->
+      <div class="card" style="margin-top:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h2 style="font-size:16px;font-weight:500;">Active payment links</h2>
+          <button class="btn btn-secondary" style="font-size:13px;" onclick="loadLinks()">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Token</th><th>Amount</th><th>Description</th><th>Status</th><th>Expires</th><th>Action</th></tr>
+            </thead>
+            <tbody id="links-tbody">
+              <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../../js/modules/api.js"></script>
+<script src="../../js/modules/auth.js"></script>
+<script src="../../js/modules/toast.js"></script>
+<script src="../../js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw new Error();
+  document.getElementById('sidebar').innerHTML = buildSidebar('operator');
+
+  let merchantId  = null;
+  let currentLink = '';
+
+  async function init() {
+    try {
+      const { merchants } = await api.merchants.list();
+      const active = merchants.find(m => m.is_active);
+      if (active) { merchantId = active.merchant_id; loadLinks(); }
+      else toast.info('No active merchant — ask your developer to register one.');
+    } catch (err) { toast.error(err.message); }
+  }
+
+  async function generateLink() {
+    if (!merchantId) { toast.error('No active merchant found'); return; }
+    const amount      = document.getElementById('f-amount').value;
+    const description = document.getElementById('f-desc').value.trim();
+    const expires     = document.getElementById('f-expires').value;
+
+    const btn = document.getElementById('gen-btn');
+    btn.disabled = true; btn.textContent = 'Generating…';
+
+    try {
+      const result = await api.payments.createLink({
+        merchant_id:      merchantId,
+        amount:           amount ? parseFloat(amount) * 1_000_000 : null,
+        description:      description || null,
+        expires_in_hours: parseInt(expires),
+      });
+
+      currentLink = result.link;
+      document.getElementById('result-link').textContent    = result.link;
+      document.getElementById('result-amount').textContent  = result.amount ? (result.amount / 1_000_000) + ' AUDD' : 'Open amount';
+      document.getElementById('result-desc').textContent    = description || '—';
+      document.getElementById('result-expires').textContent = new Date(result.expiresAt).toLocaleString();
+      document.getElementById('result-card').style.display  = 'block';
+      loadLinks();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Generate link';
+    }
+  }
+
+  function copyLink() {
+    navigator.clipboard.writeText(currentLink).then(() => toast.success('Link copied!'));
+  }
+
+  function showQR() {
+    document.getElementById('qr-area').style.display =
+      document.getElementById('qr-area').style.display === 'none' ? 'block' : 'none';
+  }
+
+  function resetForm() {
+    document.getElementById('result-card').style.display = 'none';
+    document.getElementById('f-amount').value = '';
+    document.getElementById('f-desc').value   = '';
+  }
+
+  async function loadLinks() {
+    if (!merchantId) return;
+    try {
+      const { links } = await api.payments.listForMerchant(merchantId, { limit: 20 });
+      const tbody = document.getElementById('links-tbody');
+      if (!links.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">No links yet</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = links.map(l => `
+        <tr>
+          <td style="font-family:var(--font-mono);font-size:12px;">${l.token.slice(0,8)}…</td>
+          <td>${l.amount ? (l.amount/1_000_000)+' AUDD' : 'Open'}</td>
+          <td style="color:var(--text-muted);font-size:13px;">${l.description || '—'}</td>
+          <td><span class="badge ${l.status==='active'?'badge-success':l.status==='used'?'badge-info':'badge-pending'}">${l.status}</span></td>
+          <td style="font-size:12px;color:var(--text-muted);">${new Date(l.expires_at).toLocaleString()}</td>
+          <td>${l.status==='active'?`<button class="btn btn-secondary" style="font-size:12px;padding:4px 8px;" onclick="copyPayLink('${l.token}')">Copy</button>`:'—'}</td>
+        </tr>`).join('');
+    } catch (err) {
+      toast.error('Failed to load links: ' + err.message);
+    }
+  }
+
+  async function copyPayLink(token) {
+    const url = `${window.location.origin}/pages/pay.html?token=${token}`;
+    navigator.clipboard.writeText(url).then(() => toast.success('Link copied!'));
+  }
+
+  init();
+</script>
+</body>
+</html>

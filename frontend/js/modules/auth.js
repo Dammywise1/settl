@@ -1,4 +1,4 @@
-// ── Session management ────────────────────────────────────
+// ── SETTL session manager ─────────────────────────────────
 const SESSION_KEY = 'settl_session';
 const PROFILE_KEY = 'settl_profile';
 
@@ -24,8 +24,9 @@ const auth = {
 
   isLoggedIn() {
     const s = this.getSession();
-    if (!s) return false;
-    if (s.expires_at && Date.now() / 1000 > s.expires_at) {
+    if (!s?.access_token) return false;
+    // Supabase sessions have expires_at in seconds
+    if (s.expires_at && Math.floor(Date.now() / 1000) > s.expires_at) {
       this.clear();
       return false;
     }
@@ -40,18 +41,9 @@ const auth = {
     return true;
   },
 
-  getMode() {
-    return localStorage.getItem('settl_mode') || 'operator';
-  },
-
-  setMode(mode) {
-    localStorage.setItem('settl_mode', mode);
-  },
-
-  getRole() {
-    const p = this.getProfile();
-    return p?.role || 'operator';
-  },
+  getMode()        { return localStorage.getItem('settl_mode') || 'operator'; },
+  setMode(mode)    { localStorage.setItem('settl_mode', mode); },
+  getRole()        { return this.getProfile()?.role || 'operator'; },
 };
 
 window.auth = auth;
