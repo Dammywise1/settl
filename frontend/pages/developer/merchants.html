@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SETTL — Merchants</title>
+  <link rel="stylesheet" href="../../css/app.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+
+    <div class="topbar">
+      <span class="topbar-title">Merchants</span>
+      <span class="badge badge-info">developer</span>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Register form -->
+      <div class="card" style="margin-bottom:24px;">
+        <h2 style="font-size:16px;font-weight:500;margin-bottom:18px;">Register new merchant</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="form-group">
+            <label class="form-label">Merchant ID <span style="color:var(--coral)">*</span></label>
+            <input class="form-input" id="f-merchant-id" placeholder="e.g. acme-store-001" maxlength="64"/>
+            <div class="form-hint">Unique identifier — max 64 chars. Used as the on-chain seed.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Wallet address <span style="color:var(--coral)">*</span></label>
+            <input class="form-input" id="f-wallet" placeholder="Solana public key (base58)"/>
+            <div class="form-hint">AUDD releases will go to this wallet automatically.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Display name</label>
+            <input class="form-input" id="f-name" placeholder="ACME Store"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contact email</label>
+            <input class="form-input" id="f-email" type="email" placeholder="merchant@example.com"/>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:4px;">
+          <button class="btn btn-primary" id="register-btn" onclick="registerMerchant()">
+            Register on-chain
+          </button>
+          <span id="register-status" style="font-size:13px;color:var(--text-muted);"></span>
+        </div>
+      </div>
+
+      <!-- Merchant list -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h2 style="font-size:16px;font-weight:500;">All merchants</h2>
+          <button class="btn btn-secondary" style="font-size:13px;" onclick="loadMerchants()">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Merchant ID</th>
+                <th>Name</th>
+                <th>Wallet</th>
+                <th>Status</th>
+                <th>Registered</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="merchant-tbody">
+              <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-hint);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Chain state modal -->
+<div id="chain-modal-wrap" style="display:none;min-height:400px;background:rgba(0,0,0,0.45);position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius-lg);padding:28px 32px;width:100%;max-width:540px;border:1px solid var(--border);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h3 style="font-size:16px;font-weight:500;" id="modal-title">On-chain state</h3>
+      <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-muted);">×</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script src="../../js/modules/api.js"></script>
+<script src="../../js/modules/auth.js"></script>
+<script src="../../js/modules/toast.js"></script>
+<script src="../../js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw new Error();
+  document.getElementById('sidebar').innerHTML = buildSidebar('developer');
+
+  function shortKey(k) {
+    if (!k) return '—';
+    return k.slice(0,6) + '…' + k.slice(-4);
+  }
+
+  function copyText(text) {
+    navigator.clipboard.writeText(text).then(() => toast.success('Copied!'));
+  }
+
+  async function loadMerchants() {
+    const tbody = document.getElementById('merchant-tbody');
+    try {
+      const { merchants } = await api.merchants.list();
+      if (!merchants.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-hint);">
+          No merchants yet — register the first one above.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = merchants.map(m => `
+        <tr>
+          <td>
+            <span style="font-family:var(--font-mono);font-size:12px;cursor:pointer;" onclick="copyText('${m.merchant_id}')" title="Click to copy">
+              ${m.merchant_id}
+            </span>
+          </td>
+          <td>${m.name || '—'}</td>
+          <td>
+            <span style="font-family:var(--font-mono);font-size:12px;cursor:pointer;" onclick="copyText('${m.wallet_address}')" title="Click to copy">
+              ${shortKey(m.wallet_address)}
+            </span>
+          </td>
+          <td>
+            <span class="badge ${m.is_active ? 'badge-success' : 'badge-pending'}">
+              ${m.is_active ? 'Active' : 'Inactive'}
+            </span>
+          </td>
+          <td style="color:var(--text-muted);font-size:13px;">
+            ${m.registered_at ? new Date(m.registered_at).toLocaleDateString() : '—'}
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px;" onclick="showChainState('${m.merchant_id}')">Chain state</button>
+              ${m.is_active ? `<button class="btn btn-danger" style="font-size:12px;padding:4px 10px;" onclick="deactivate('${m.merchant_id}')">Deactivate</button>` : ''}
+            </div>
+          </td>
+        </tr>`).join('');
+    } catch (err) {
+      toast.error('Failed to load merchants: ' + err.message);
+    }
+  }
+
+  async function registerMerchant() {
+    const merchantId = document.getElementById('f-merchant-id').value.trim();
+    const wallet     = document.getElementById('f-wallet').value.trim();
+    const name       = document.getElementById('f-name').value.trim();
+    const email      = document.getElementById('f-email').value.trim();
+
+    if (!merchantId) { toast.error('Merchant ID is required'); return; }
+    if (!wallet)     { toast.error('Wallet address is required'); return; }
+    if (merchantId.length > 64) { toast.error('Merchant ID must be 64 chars or fewer'); return; }
+
+    const btn    = document.getElementById('register-btn');
+    const status = document.getElementById('register-status');
+    btn.disabled = true;
+    btn.textContent = 'Registering on-chain…';
+    status.textContent = 'Sending transaction to Devnet…';
+
+    try {
+      const result = await api.merchants.create({ merchant_id: merchantId, wallet_address: wallet, name, email });
+      status.textContent = '';
+      toast.success('Merchant registered on-chain!');
+
+      // Clear form
+      ['f-merchant-id','f-wallet','f-name','f-email'].forEach(id => document.getElementById(id).value = '');
+
+      // Show tx links
+      showTxResult(result);
+      loadMerchants();
+    } catch (err) {
+      toast.error(err.message);
+      status.textContent = 'Failed: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Register on-chain';
+    }
+  }
+
+  function showTxResult(result) {
+    const explorerBase = 'https://explorer.solana.com/tx/';
+    const cluster      = '?cluster=devnet';
+    openModal('Registration successful', `
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <div class="form-label" style="margin-bottom:4px;">Register tx</div>
+          <a href="${explorerBase}${result.registerTx}${cluster}" target="_blank"
+             style="font-family:var(--font-mono);font-size:12px;word-break:break-all;">
+            ${result.registerTx}
+          </a>
+        </div>
+        <div>
+          <div class="form-label" style="margin-bottom:4px;">Escrow init tx</div>
+          <a href="${explorerBase}${result.escrowTx}${cluster}" target="_blank"
+             style="font-family:var(--font-mono);font-size:12px;word-break:break-all;">
+            ${result.escrowTx}
+          </a>
+        </div>
+        <div>
+          <div class="form-label" style="margin-bottom:4px;">Vault PDA</div>
+          <span style="font-family:var(--font-mono);font-size:12px;cursor:pointer;" onclick="copyText('${result.vaultPDA}')">
+            ${result.vaultPDA}
+          </span>
+        </div>
+      </div>
+    `);
+  }
+
+  async function showChainState(merchantId) {
+    openModal('On-chain state — ' + merchantId, '<p style="color:var(--text-muted);">Fetching from Devnet…</p>');
+    try {
+      const { merchant, escrow } = await api.merchants.getChainState(merchantId);
+      const escrowData = await api.escrow.get(merchantId).catch(() => null);
+
+      openModal('On-chain state — ' + merchantId, `
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div>
+            <div class="form-label" style="margin-bottom:8px;">Merchant account</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+              <div style="color:var(--text-muted);">Active</div>
+              <div><span class="badge ${merchant.isActive ? 'badge-success' : 'badge-pending'}">${merchant.isActive}</span></div>
+              <div style="color:var(--text-muted);">Wallet</div>
+              <div style="font-family:var(--font-mono);font-size:12px;cursor:pointer;" onclick="copyText('${merchant.wallet}')">${shortKey(merchant.wallet)}</div>
+              <div style="color:var(--text-muted);">Total released</div>
+              <div>${(merchant.totalReleased / 1_000_000).toFixed(6)} AUDD</div>
+              <div style="color:var(--text-muted);">Total fees paid</div>
+              <div>${(merchant.totalFeesPaid / 1_000_000).toFixed(6)} AUDD</div>
+              ${merchant.pendingWallet ? `
+              <div style="color:var(--text-muted);">Pending wallet</div>
+              <div style="font-family:var(--font-mono);font-size:12px;">${shortKey(merchant.pendingWallet)}</div>
+              <div style="color:var(--text-muted);">Unlocks at</div>
+              <div>${merchant.walletUpdateAt ? new Date(merchant.walletUpdateAt * 1000).toLocaleString() : '—'}</div>
+              ` : ''}
+            </div>
+          </div>
+          ${escrow ? `
+          <div>
+            <div class="form-label" style="margin-bottom:8px;">Escrow vault</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+              <div style="color:var(--text-muted);">Pending balance</div>
+              <div style="font-weight:500;">${(escrow.pendingBalance / 1_000_000).toFixed(6)} AUDD</div>
+              <div style="color:var(--text-muted);">Total payments</div>
+              <div>${escrow.totalPayments}</div>
+              <div style="color:var(--text-muted);">Last released</div>
+              <div>${escrow.lastReleasedAt || '—'}</div>
+              <div style="color:var(--text-muted);">Source</div>
+              <div><span class="badge badge-info">${escrow.source}</span></div>
+            </div>
+          </div>
+          ` : ''}
+          ${merchant.pendingWallet ? `
+          <div style="border-top:1px solid var(--border);padding-top:16px;">
+            <div class="form-label" style="margin-bottom:8px;">Wallet update pending</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+              A wallet change to <strong>${shortKey(merchant.pendingWallet)}</strong> is staged.
+              It can be confirmed after ${new Date(merchant.walletUpdateAt * 1000).toLocaleString()}.
+            </p>
+            <button class="btn btn-primary" style="font-size:13px;" onclick="confirmWalletUpdate('${merchantId}')">
+              Confirm wallet update
+            </button>
+          </div>
+          ` : `
+          <div style="border-top:1px solid var(--border);padding-top:16px;">
+            <div class="form-label" style="margin-bottom:8px;">Request wallet update</div>
+            <div style="display:flex;gap:8px;">
+              <input class="form-input" id="new-wallet-input" placeholder="New Solana public key" style="flex:1;"/>
+              <button class="btn btn-secondary" onclick="requestWalletUpdate('${merchantId}')">Stage update</button>
+            </div>
+            <div class="form-hint">A 24-hour security delay applies before the change can be confirmed.</div>
+          </div>
+          `}
+        </div>
+      `);
+    } catch (err) {
+      openModal('Error', `<p style="color:var(--coral);">${err.message}</p>`);
+    }
+  }
+
+  async function deactivate(merchantId) {
+    if (!confirm(`Deactivate merchant "${merchantId}"? This stops the escrow from accepting deposits.`)) return;
+    try {
+      await api.merchants.deactivate(merchantId);
+      toast.success('Merchant deactivated on-chain');
+      loadMerchants();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  async function requestWalletUpdate(merchantId) {
+    const newWallet = document.getElementById('new-wallet-input')?.value?.trim();
+    if (!newWallet) { toast.error('Enter a new wallet address'); return; }
+    try {
+      const result = await api.merchants.requestWalletUpdate(merchantId, newWallet);
+      toast.success('Wallet update staged — confirm in 24 hours');
+      closeModal();
+      loadMerchants();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  async function confirmWalletUpdate(merchantId) {
+    try {
+      await api.merchants.confirmWalletUpdate(merchantId);
+      toast.success('Wallet updated on-chain');
+      closeModal();
+      loadMerchants();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  function openModal(title, bodyHtml) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').innerHTML    = bodyHtml;
+    document.getElementById('chain-modal-wrap').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('chain-modal-wrap').style.display = 'none';
+  }
+
+  loadMerchants();
+</script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SETTL — Sign in</title>
+  <link rel="stylesheet" href="../../css/app.css" />
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo">SETTL</div>
+    <div class="auth-sub">Payment gateway · Sign in to continue</div>
+
+    <div id="form-view">
+      <div class="form-group">
+        <label class="form-label" for="email">Email address</label>
+        <input class="form-input" type="email" id="email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <button class="btn btn-primary" style="width:100%;" id="login-btn" onclick="sendMagicLink()">
+        Send magic link
+      </button>
+      <p class="form-hint" style="margin-top:14px; text-align:center;">
+        We'll email you a one-click sign-in link. No password needed.
+      </p>
+    </div>
+
+    <div id="sent-view" style="display:none; text-align:center;">
+      <div style="font-size:32px; margin-bottom:12px;">✉</div>
+      <h3 style="margin-bottom:8px;">Check your email</h3>
+      <p style="color:var(--text-muted); font-size:14px;">
+        We sent a sign-in link to <strong id="sent-email"></strong>.<br/>
+        Click the link in the email to continue.
+      </p>
+      <button class="btn btn-secondary" style="margin-top:20px; width:100%;" onclick="resetForm()">
+        Use a different email
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="../../js/modules/api.js"></script>
+<script src="../../js/modules/auth.js"></script>
+<script src="../../js/modules/toast.js"></script>
+<script>
+  // Already logged in → redirect
+  if (auth.isLoggedIn()) window.location.href = '/pages/dashboard.html';
+
+  async function sendMagicLink() {
+    const email = document.getElementById('email').value.trim();
+    if (!email) { toast.error('Please enter your email'); return; }
+
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+
+    try {
+      await api.auth.login(email);
+      document.getElementById('sent-email').textContent = email;
+      document.getElementById('form-view').style.display = 'none';
+      document.getElementById('sent-view').style.display = 'block';
+    } catch (err) {
+      toast.error(err.message || 'Failed to send magic link');
+      btn.disabled = false;
+      btn.textContent = 'Send magic link';
+    }
+  }
+
+  function resetForm() {
+    document.getElementById('form-view').style.display = 'block';
+    document.getElementById('sent-view').style.display = 'none';
+    const btn = document.getElementById('login-btn');
+    btn.disabled = false;
+    btn.textContent = 'Send magic link';
+  }
+
+  document.getElementById('email').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendMagicLink();
+  });
+</script>
+</body>
+</html>

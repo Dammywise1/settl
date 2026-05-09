@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SETTL — Payment Gateway</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <script>
+    // Redirect to login if no session, else to dashboard
+    const session = localStorage.getItem('settl_session');
+    if (session) {
+      window.location.href = '/pages/dashboard.html';
+    } else {
+      window.location.href = '/pages/auth/login.html';
+    }
+  </script>
+</body>
+</html>

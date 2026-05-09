@@ -1,0 +1,1274 @@
+{
+  "address": "RZgHzaU8jKm4ydzwkmoooqd2TNek4L9W4o8tthekeLn",
+  "metadata": {
+    "name": "settl",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Settl — merchant registry, AUDD escrow, and platform fee in one contract"
+  },
+  "instructions": [
+    {
+      "name": "confirm_wallet_update",
+      "docs": [
+        "Confirm wallet update after 24-hour delay has passed."
+      ],
+      "discriminator": [
+        31,
+        13,
+        177,
+        74,
+        122,
+        121,
+        252,
+        111
+      ],
+      "accounts": [
+        {
+          "name": "merchant",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "merchant"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "deactivate_merchant",
+      "docs": [
+        "Deactivate a merchant — escrow stops accepting deposits."
+      ],
+      "discriminator": [
+        6,
+        24,
+        193,
+        187,
+        114,
+        238,
+        51,
+        253
+      ],
+      "accounts": [
+        {
+          "name": "merchant",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "merchant"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "deposit",
+      "docs": [
+        "Customer deposits AUDD into a merchant escrow vault.",
+        "Customer is the ONLY signer.",
+        "Merchant does absolutely nothing."
+      ],
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "merchant",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  114,
+                  99,
+                  104,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "merchant_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "merchant_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "merchant_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "customer_ata",
+          "writable": true
+        },
+        {
+          "name": "customer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "merchant_id",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_config",
+      "docs": [
+        "Initialize global Settl config.",
+        "Called once at deploy."
+      ],
+      "discriminator": [
+        208,
+        127,
+        21,
+        1,
+        194,
+        190,
+        196,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_wallet"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_basis_points",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "initialize_merchant_escrow",
+      "docs": [
+        "Create an AUDD escrow vault for a merchant.",
+        "Called by backend at merchant registration.",
+        "Merchant never signs or calls this."
+      ],
+      "discriminator": [
+        77,
+        221,
+        38,
+        217,
+        7,
+        48,
+        251,
+        173
+      ],
+      "accounts": [
+        {
+          "name": "merchant",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  114,
+                  99,
+                  104,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "merchant_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "merchant_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "merchant_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "audd_mint"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "merchant_id",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "register_merchant",
+      "docs": [
+        "Register a merchant on-chain.",
+        "Called by Settl backend only.",
+        "Merchant never signs or interacts with this."
+      ],
+      "discriminator": [
+        238,
+        245,
+        77,
+        132,
+        161,
+        88,
+        216,
+        248
+      ],
+      "accounts": [
+        {
+          "name": "merchant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  114,
+                  99,
+                  104,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "merchant_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "merchant_id",
+          "type": "string"
+        },
+        {
+          "name": "wallet_address",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "release",
+      "docs": [
+        "Release all pending AUDD at 6am daily.",
+        "Only callable by Settl backend authority.",
+        "",
+        "gross = pending escrow balance",
+        "fee   = gross * 150 / 10_000  (1.5%)",
+        "net   = gross - fee",
+        "",
+        "net → merchant wallet  (automatic)",
+        "fee → treasury wallet  (automatic, same tx)",
+        "Merchant receives funds — never needs to do anything."
+      ],
+      "discriminator": [
+        253,
+        249,
+        15,
+        206,
+        28,
+        127,
+        193,
+        241
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "merchant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  114,
+                  99,
+                  104,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "merchant_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "merchant_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "merchant_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "merchant_ata",
+          "writable": true
+        },
+        {
+          "name": "treasury_ata",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "merchant_id",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "request_wallet_update",
+      "docs": [
+        "Request a wallet address change.",
+        "Stored with a 24-hour security delay."
+      ],
+      "discriminator": [
+        150,
+        76,
+        211,
+        255,
+        241,
+        146,
+        149,
+        145
+      ],
+      "accounts": [
+        {
+          "name": "merchant",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "merchant"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_wallet",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_escrow_wallet",
+      "docs": [
+        "Sync escrow wallet after a confirmed registry wallet update."
+      ],
+      "discriminator": [
+        141,
+        29,
+        105,
+        158,
+        74,
+        186,
+        235,
+        112
+      ],
+      "accounts": [
+        {
+          "name": "merchant"
+        },
+        {
+          "name": "escrow",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "merchant",
+            "escrow"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_fee",
+      "docs": [
+        "Update the platform fee rate.",
+        "Max 10% (1000 basis points)."
+      ],
+      "discriminator": [
+        232,
+        253,
+        195,
+        247,
+        148,
+        212,
+        73,
+        222
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_treasury"
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_fee_basis_points",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "update_treasury",
+      "docs": [
+        "Update the treasury wallet that receives platform fees."
+      ],
+      "discriminator": [
+        60,
+        16,
+        243,
+        66,
+        96,
+        59,
+        254,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_treasury"
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EscrowAccount",
+      "discriminator": [
+        36,
+        69,
+        48,
+        18,
+        128,
+        225,
+        125,
+        135
+      ]
+    },
+    {
+      "name": "MerchantAccount",
+      "discriminator": [
+        182,
+        10,
+        106,
+        140,
+        73,
+        79,
+        234,
+        186
+      ]
+    },
+    {
+      "name": "SettlConfig",
+      "discriminator": [
+        120,
+        16,
+        48,
+        253,
+        224,
+        191,
+        203,
+        197
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ConfigInitialized",
+      "discriminator": [
+        181,
+        49,
+        200,
+        156,
+        19,
+        167,
+        178,
+        91
+      ]
+    },
+    {
+      "name": "EscrowInitialized",
+      "discriminator": [
+        222,
+        186,
+        157,
+        47,
+        145,
+        142,
+        176,
+        248
+      ]
+    },
+    {
+      "name": "FeeUpdated",
+      "discriminator": [
+        228,
+        75,
+        43,
+        103,
+        9,
+        196,
+        182,
+        4
+      ]
+    },
+    {
+      "name": "FundsReleased",
+      "discriminator": [
+        178,
+        119,
+        252,
+        230,
+        131,
+        104,
+        210,
+        210
+      ]
+    },
+    {
+      "name": "MerchantDeactivated",
+      "discriminator": [
+        188,
+        57,
+        57,
+        17,
+        73,
+        221,
+        112,
+        241
+      ]
+    },
+    {
+      "name": "MerchantRegistered",
+      "discriminator": [
+        202,
+        61,
+        140,
+        95,
+        139,
+        239,
+        17,
+        83
+      ]
+    },
+    {
+      "name": "PaymentReceived",
+      "discriminator": [
+        238,
+        145,
+        50,
+        71,
+        36,
+        83,
+        130,
+        215
+      ]
+    },
+    {
+      "name": "TreasuryUpdated",
+      "discriminator": [
+        80,
+        239,
+        54,
+        168,
+        43,
+        38,
+        85,
+        145
+      ]
+    },
+    {
+      "name": "WalletUpdateRequested",
+      "discriminator": [
+        10,
+        45,
+        42,
+        214,
+        77,
+        17,
+        184,
+        68
+      ]
+    },
+    {
+      "name": "WalletUpdated",
+      "discriminator": [
+        215,
+        34,
+        10,
+        59,
+        24,
+        114,
+        201,
+        129
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "FeeTooHigh",
+      "msg": "Fee cannot exceed 10% (1000 basis points)"
+    },
+    {
+      "code": 6001,
+      "name": "MerchantIdTooLong",
+      "msg": "Merchant ID must be 64 characters or fewer"
+    },
+    {
+      "code": 6002,
+      "name": "Unauthorized",
+      "msg": "Unauthorized — only the Settl authority can call this"
+    },
+    {
+      "code": 6003,
+      "name": "NoWalletUpdatePending",
+      "msg": "No wallet update is pending"
+    },
+    {
+      "code": 6004,
+      "name": "WalletUpdateNotReady",
+      "msg": "24-hour wallet update delay has not passed yet"
+    },
+    {
+      "code": 6005,
+      "name": "ZeroAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6006,
+      "name": "ZeroBalance",
+      "msg": "No pending balance to release"
+    },
+    {
+      "code": 6007,
+      "name": "MerchantMismatch",
+      "msg": "Merchant ID does not match this escrow"
+    },
+    {
+      "code": 6008,
+      "name": "MerchantInactive",
+      "msg": "Merchant is inactive — not accepting payments"
+    },
+    {
+      "code": 6009,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "ConfigInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_basis_points",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merchant_id",
+            "type": "string"
+          },
+          {
+            "name": "merchant_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_balance",
+            "type": "u64"
+          },
+          {
+            "name": "total_payments",
+            "type": "u64"
+          },
+          {
+            "name": "last_released_at",
+            "type": "i64"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merchant_id",
+            "type": "string"
+          },
+          {
+            "name": "merchant_wallet",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeeUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_fee",
+            "type": "u16"
+          },
+          {
+            "name": "new_fee",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FundsReleased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merchant_id",
+            "type": "string"
+          },
+          {
+            "name": "merchant_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "gross",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "net",
+            "type": "u64"
+          },
+          {
+            "name": "released_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MerchantAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merchant_id",
+            "type": "string"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          },
+          {
+            "name": "registered_at",
+            "type": "i64"
+          },
+          {
+            "name": "total_released",
+            "type": "u64"
+          },
+          {
+            "name": "total_fees_paid",
+            "type": "u64"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_wallet",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "wallet_update_at",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MerchantDeactivated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merchant_id",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MerchantRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merchant_id",
+            "type": "string"
+          },
+          {
+            "name": "wallet_address",
+            "type": "pubkey"
+          },
+          {
+            "name": "registered_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PaymentReceived",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merchant_id",
+            "type": "string"
+          },
+          {
+            "name": "customer_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "pending_balance",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_basis_points",
+            "type": "u16"
+          },
+          {
+            "name": "total_fees_collected",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreasuryUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_treasury",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WalletUpdateRequested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merchant_id",
+            "type": "string"
+          },
+          {
+            "name": "new_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "unlocks_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WalletUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merchant_id",
+            "type": "string"
+          },
+          {
+            "name": "old_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_wallet",
+            "type": "pubkey"
+          }
+        ]
+      }
+    }
+  ]
+}

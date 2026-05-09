@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SETTL — Balance</title>
+  <link rel="stylesheet" href="../../css/app.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+
+    <div class="topbar">
+      <span class="topbar-title">Balance</span>
+      <span class="badge badge-success">operator</span>
+    </div>
+
+    <div class="page-body">
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-title">Pending balance</div>
+          <div class="card-value" id="pending-balance">—</div>
+          <div class="card-sub">Releases automatically at 6am</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Total payments</div>
+          <div class="card-value" id="total-payments">—</div>
+          <div class="card-sub">Deposits received all time</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Total released</div>
+          <div class="card-value" id="total-released">—</div>
+          <div class="card-sub">Net AUDD received</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Total fees paid</div>
+          <div class="card-value" id="total-fees">—</div>
+          <div class="card-sub">1.5% per release</div>
+        </div>
+      </div>
+
+      <!-- Wallet info -->
+      <div class="card">
+        <h2 style="font-size:16px;font-weight:500;margin-bottom:16px;">Merchant wallet</h2>
+        <div id="wallet-section">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <code id="wallet-address" style="font-family:var(--font-mono);font-size:13px;background:var(--bg);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);">Loading…</code>
+            <button class="btn btn-secondary" style="font-size:13px;" onclick="copyWallet()">Copy</button>
+          </div>
+          <div id="pending-wallet-notice" style="display:none;margin-top:12px;padding:12px;background:var(--color-background-warning);border-radius:var(--radius-sm);font-size:13px;color:var(--color-text-warning);border:1px solid var(--color-border-warning);">
+            A wallet update is pending. It will be confirmed by your administrator after the 24-hour security delay.
+          </div>
+        </div>
+      </div>
+
+      <!-- Vault technical details -->
+      <div class="card">
+        <h2 style="font-size:16px;font-weight:500;margin-bottom:16px;">Escrow vault</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;" id="vault-details">
+          <div style="color:var(--text-muted);">Vault address</div>
+          <div id="vault-addr" style="font-family:var(--font-mono);font-size:12px;">—</div>
+          <div style="color:var(--text-muted);">Last released</div>
+          <div id="last-released">—</div>
+          <div style="color:var(--text-muted);">Data source</div>
+          <div id="data-source"><span class="badge badge-info">—</span></div>
+        </div>
+        <button class="btn btn-secondary" style="font-size:13px;margin-top:16px;" onclick="loadBalance()">Refresh from chain</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../../js/modules/api.js"></script>
+<script src="../../js/modules/auth.js"></script>
+<script src="../../js/modules/toast.js"></script>
+<script src="../../js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw new Error();
+  document.getElementById('sidebar').innerHTML = buildSidebar('operator');
+
+  function fmtAUDD(raw) {
+    if (raw == null) return '—';
+    return (raw / 1_000_000).toFixed(6) + ' AUDD';
+  }
+
+  let currentMerchantId = null;
+
+  async function loadBalance() {
+    try {
+      const { merchants } = await api.merchants.list();
+      const active = merchants.find(m => m.is_active);
+      if (!active) {
+        toast.info('No active merchant found — ask your developer to register one.');
+        return;
+      }
+      currentMerchantId = active.merchant_id;
+
+      const [escrow, chainState] = await Promise.all([
+        api.escrow.get(active.merchant_id),
+        api.merchants.getChainState(active.merchant_id).catch(() => null),
+      ]);
+
+      document.getElementById('pending-balance').textContent = fmtAUDD(escrow.pendingBalance);
+      document.getElementById('total-payments').textContent  = escrow.totalPayments ?? '—';
+
+      if (chainState?.merchant) {
+        document.getElementById('total-released').textContent = fmtAUDD(chainState.merchant.totalReleased);
+        document.getElementById('total-fees').textContent     = fmtAUDD(chainState.merchant.totalFeesPaid);
+        document.getElementById('wallet-address').textContent  = chainState.merchant.wallet;
+
+        if (chainState.merchant.pendingWallet) {
+          document.getElementById('pending-wallet-notice').style.display = 'block';
+        }
+      }
+
+      document.getElementById('vault-addr').textContent   = escrow.vaultAddress || '—';
+      document.getElementById('last-released').textContent = escrow.lastReleasedAt
+        ? new Date(escrow.lastReleasedAt).toLocaleString() : 'Never';
+      document.getElementById('data-source').innerHTML =
+        `<span class="badge ${escrow.source === 'chain' ? 'badge-success' : 'badge-pending'}">${escrow.source}</span>`;
+
+    } catch (err) {
+      toast.error('Failed to load balance: ' + err.message);
+    }
+  }
+
+  function copyWallet() {
+    const addr = document.getElementById('wallet-address').textContent;
+    navigator.clipboard.writeText(addr).then(() => toast.success('Wallet address copied!'));
+  }
+
+  loadBalance();
+</script>
+</body>
+</html>
