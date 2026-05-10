@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>SETTL — Create payment</title>
   <link rel="stylesheet" href="/css/app.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -11,87 +12,112 @@
 <div class="app-shell">
   <nav class="sidebar" id="sidebar"></nav>
   <div class="main-content">
+
     <div class="topbar">
-      <div class="topbar-left"><button class="menu-btn" onclick="openSidebar()">☰</button><span class="topbar-title">Create payment</span></div>
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Create payment</span>
+      </div>
       <span class="badge badge-success">merchant</span>
     </div>
 
     <div class="page-body">
 
-      <!-- Form card -->
-      <div class="card" style="max-width:520px;">
+      <!-- Form -->
+      <div class="card" style="max-width:540px;" id="form-card">
         <div class="card-title-row"><h2>New payment request</h2></div>
         <p style="color:var(--text-muted);font-size:14px;margin-bottom:18px;line-height:1.6;">
-          Generate a QR code and shareable link. Customers pay AUDD directly into your escrow vault using any Solana wallet.
+          Generate a QR code and shareable link. Customers pay AUDD directly into your escrow vault using any Solana wallet (Phantom, Backpack, Solflare).
         </p>
 
         <div class="form-group">
           <label class="form-label">Amount (AUDD) <span style="color:var(--text-hint);font-weight:400;">— leave blank for open amount</span></label>
-          <input class="form-input" id="inp-amount" type="number" min="0.01" step="0.01" placeholder="e.g. 25.00" style="font-size:20px;font-weight:600;"/>
+          <input class="form-input" id="inp-amount" type="number" min="0.01" step="0.01"
+                 placeholder="e.g. 25.00"
+                 style="font-size:24px;font-weight:700;text-align:center;letter-spacing:.02em;"/>
         </div>
         <div class="form-group">
           <label class="form-label">Order reference / message <span style="color:var(--text-hint);font-weight:400;">— optional</span></label>
           <input class="form-input" id="inp-msg" placeholder="e.g. Order #1234, Invoice INV-001"/>
         </div>
+
         <div id="form-err" class="alert alert-error" style="display:none;"></div>
-        <button class="btn btn-primary btn-full" id="gen-btn" onclick="generate()" style="font-size:16px;padding:14px;">
-          Generate payment link
+
+        <button class="btn btn-primary btn-full" id="gen-btn" onclick="generate()"
+                style="font-size:16px;padding:14px;">
+          Generate QR code &amp; link
         </button>
       </div>
 
-      <!-- Result card (hidden until generated) -->
-      <div class="card" id="result-card" style="display:none;max-width:520px;">
+      <!-- Result -->
+      <div class="card" id="result-card" style="display:none;max-width:540px;">
 
         <!-- Steps -->
-        <div class="steps">
-          <div class="step active" id="st1">1</div>
-          <div class="step-line" id="sl1"></div>
-          <div class="step waiting" id="st2">2</div>
-          <div class="step-line" id="sl2"></div>
-          <div class="step waiting" id="st3">✓</div>
+        <div class="steps" style="margin-bottom:6px;">
+          <div class="step done"    id="st1">✓</div><div class="step-line done" id="sl1"></div>
+          <div class="step active"  id="st2">2</div><div class="step-line"      id="sl2"></div>
+          <div class="step waiting" id="st3">3</div>
         </div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;" id="step-label">Waiting for customer to pay…</p>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:18px;" id="step-label">
+          Share the link or show QR — waiting for customer to pay…
+        </div>
 
         <!-- QR code -->
-        <div class="qr-wrap" style="margin-bottom:16px;">
+        <div class="qr-wrap" id="qr-section" style="margin-bottom:18px;">
           <div id="qr-canvas"></div>
           <div style="text-align:center;">
-            <div style="font-size:15px;font-weight:600;" id="qr-merchant"></div>
-            <div style="font-size:26px;font-weight:700;color:var(--brand);margin:6px 0;" id="qr-amount"></div>
+            <div style="font-size:16px;font-weight:700;" id="qr-merchant-name"></div>
+            <div style="font-size:28px;font-weight:800;color:var(--brand);margin:6px 0 2px;" id="qr-amount-display"></div>
             <div style="font-size:12px;color:var(--text-muted);">AUDD · Solana Devnet · Powered by SETTL</div>
           </div>
         </div>
 
-        <!-- Polling indicator -->
-        <div id="polling-row" style="display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:14px;margin-bottom:14px;">
-          <div class="spinner"></div><span>Watching for payment on-chain…</span>
+        <!-- Watching -->
+        <div id="watching-row" style="display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:14px;margin-bottom:16px;">
+          <div class="spinner"></div>
+          <span>Watching for payment on-chain…</span>
         </div>
 
         <!-- Confirmed -->
-        <div id="confirmed-row" style="display:none;" class="alert alert-success">
-          ✓ Payment confirmed on-chain!
-          <a id="conf-tx" href="#" target="_blank" style="display:block;font-size:12px;font-family:var(--font-mono);margin-top:4px;word-break:break-all;"></a>
+        <div id="confirmed-row" class="alert alert-success" style="display:none;margin-bottom:16px;">
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px;">💰 Payment confirmed!</div>
+          <a id="conf-tx-link" href="#" target="_blank"
+             style="font-size:11px;font-family:var(--font-mono);word-break:break-all;color:var(--teal);display:block;margin-top:4px;"></a>
         </div>
 
         <!-- Share section -->
-        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px;">
+        <div style="border-top:1px solid var(--border);padding-top:16px;">
           <div class="form-label" style="margin-bottom:8px;">Share this payment link</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-            <input class="form-input" id="share-url" readonly style="flex:1;font-size:12px;font-family:var(--font-mono);"/>
+
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <input class="form-input" id="share-url" readonly
+                   style="flex:1;font-size:12px;font-family:var(--font-mono);background:var(--bg);"/>
           </div>
+
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-secondary btn-sm" onclick="copyLink()">📋 Copy link</button>
-            <button class="btn btn-secondary btn-sm" onclick="shareLink()">↑ Share</button>
-            <a id="whatsapp-btn" href="#" target="_blank" class="btn btn-secondary btn-sm" style="background:#25D366;color:#fff;border:none;">WhatsApp</a>
-            <button class="btn btn-secondary btn-sm" onclick="newPayment()">+ New payment</button>
+            <button class="btn btn-secondary" onclick="copyLink()" style="flex:1;min-width:100px;">📋 Copy link</button>
+            <button class="btn btn-secondary" onclick="nativeShare()" style="flex:1;min-width:80px;">↑ Share</button>
+            <a id="whatsapp-btn" href="#" target="_blank"
+               class="btn" style="background:#25D366;color:#fff;border:none;flex:1;min-width:100px;">
+              WhatsApp
+            </a>
           </div>
-          <div class="form-hint" style="margin-top:8px;">
-            This link opens a checkout page. Anyone with the link can scan the QR and pay — no SETTL account needed.
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+            <a id="checkout-open" href="#" target="_blank" class="btn btn-secondary" style="flex:1;min-width:120px;">
+              Open checkout page
+            </a>
+            <button class="btn btn-secondary" onclick="newPayment()" style="flex:1;min-width:100px;">
+              + New payment
+            </button>
+          </div>
+
+          <div class="form-hint" style="margin-top:10px;">
+            Anyone with this link can open the checkout page and pay. No SETTL account needed.
           </div>
         </div>
 
       </div>
-
     </div>
   </div>
 </div>
@@ -106,17 +132,28 @@
 
   const merchant = auth.getMerchant();
   if (merchant && !merchant.is_active) {
-    document.getElementById('form-err').textContent = 'Your merchant is still being registered on-chain. Please wait a moment and refresh.';
+    document.getElementById('form-err').textContent =
+      'Your merchant is still being registered on Solana. Please wait and refresh.';
     document.getElementById('form-err').style.display = '';
     document.getElementById('gen-btn').disabled = true;
   }
 
-  let pollTimer = null;
-  let currentCheckoutUrl = null;
-  let currentRef = null;
+  let pollTimer    = null;
+  let checkoutUrl  = null;
+  let currentRef   = null;
+
+  function setStep(n) {
+    [1,2,3].forEach(i => {
+      const s = document.getElementById(`st${i}`);
+      const l = document.getElementById(`sl${i}`);
+      s.className = `step ${i<n?'done':i===n?'active':'waiting'}`;
+      s.textContent = i<n?'✓':String(i);
+      if(l) l.className = `step-line${i<n?' done':''}`;
+    });
+  }
 
   async function generate() {
-    const amountVal = document.getElementById('inp-amount').value;
+    const amountStr = document.getElementById('inp-amount').value;
     const message   = document.getElementById('inp-msg').value.trim();
     document.getElementById('form-err').style.display = 'none';
 
@@ -127,7 +164,7 @@
       return;
     }
 
-    const amount = amountVal ? parseFloat(amountVal) : null;
+    const amount = amountStr ? parseFloat(amountStr) : null;
     if (amount !== null && (isNaN(amount) || amount <= 0)) {
       document.getElementById('form-err').textContent = 'Enter a valid amount greater than 0.';
       document.getElementById('form-err').style.display = '';
@@ -140,14 +177,14 @@
     try {
       const session = await api.payments.session({
         merchant_id: m.merchant_id,
-        amount:      amount,
-        message:     message || null,
+        amount,
+        message: message || null,
       });
 
-      currentRef         = session.reference;
-      currentCheckoutUrl = session.checkout_url;
+      currentRef  = session.reference;
+      checkoutUrl = session.checkout_url;
 
-      // Render QR from Solana Pay URL
+      // QR code from Solana Pay URL
       document.getElementById('qr-canvas').innerHTML = '';
       new QRCode(document.getElementById('qr-canvas'), {
         text:         session.url,
@@ -156,80 +193,75 @@
         correctLevel: QRCode.CorrectLevel.M,
       });
 
-      document.getElementById('qr-merchant').textContent = session.merchant_name || m.merchant_id;
-      document.getElementById('qr-amount').textContent   = amount ? amount.toFixed(2) + ' AUDD' : 'Open amount';
+      document.getElementById('qr-merchant-name').textContent  = session.merchant_name || m.merchant_id;
+      document.getElementById('qr-amount-display').textContent = amount ? amount.toFixed(2)+' AUDD' : 'Open amount';
 
-      // Share URL = checkout page link
-      const shareUrl = session.checkout_url;
-      document.getElementById('share-url').value = shareUrl;
+      // Share URL = checkout page (uses real host, not localhost)
+      document.getElementById('share-url').value       = checkoutUrl;
+      document.getElementById('checkout-open').href    = checkoutUrl;
 
-      // WhatsApp share
-      const waMsg = encodeURIComponent(`Pay ${amount ? amount + ' AUDD' : ''} to ${session.merchant_name || m.merchant_id}: ${shareUrl}`);
-      document.getElementById('whatsapp-btn').href = `https://wa.me/?text=${waMsg}`;
+      // WhatsApp
+      const waText = encodeURIComponent(
+        `${amount?'Pay '+amount.toFixed(2)+' AUDD to ':''} ${session.merchant_name||m.merchant_id}: ${checkoutUrl}`
+      );
+      document.getElementById('whatsapp-btn').href = `https://wa.me/?text=${waText}`;
 
-      document.getElementById('result-card').style.display = '';
+      document.getElementById('result-card').style.display   = '';
       document.getElementById('confirmed-row').style.display = 'none';
-      document.getElementById('polling-row').style.display  = 'flex';
-      setStep(1);
+      document.getElementById('watching-row').style.display  = 'flex';
+      setStep(2);
+      document.getElementById('step-label').textContent = 'Share the link or show QR — watching for payment…';
+
+      stopPolling();
       startPolling(currentRef);
       document.getElementById('result-card').scrollIntoView({ behavior: 'smooth' });
 
-    } catch(err) {
+    } catch (err) {
       document.getElementById('form-err').textContent = err.message;
       document.getElementById('form-err').style.display = '';
     } finally {
-      btn.disabled = false; btn.textContent = 'Generate payment link';
+      btn.disabled = false; btn.textContent = 'Generate QR code & link';
     }
   }
 
   function startPolling(ref) {
-    stopPolling();
-    setStep(2);
-    document.getElementById('step-label').textContent = 'Scanning for payment on Solana Devnet…';
     pollTimer = setInterval(async () => {
       try {
-        const r = await api.payments.pollPublic(ref);
+        const r = await api.payments.pollPublic(ref); // plain fetch, no auth
         if (r.status === 'confirmed') {
           stopPolling();
           setStep(3);
-          document.getElementById('step-label').textContent   = 'Payment received!';
-          document.getElementById('polling-row').style.display  = 'none';
+          document.getElementById('step-label').textContent   = '✓ Payment confirmed on-chain!';
+          document.getElementById('watching-row').style.display = 'none';
           document.getElementById('confirmed-row').style.display = '';
-          const txLink = document.getElementById('conf-tx');
+          document.getElementById('qr-section').style.display = 'none';
+
+          const txLink = document.getElementById('conf-tx-link');
           txLink.href        = `https://explorer.solana.com/tx/${r.tx}?cluster=devnet`;
-          txLink.textContent = r.tx;
+          txLink.textContent = `Tx: ${r.tx?.slice(0,20)}… — View on Solana Explorer →`;
+
           toast.success('💰 Payment confirmed!');
         } else if (r.status === 'expired') {
           stopPolling();
           document.getElementById('step-label').textContent = 'Session expired. Generate a new payment.';
-          document.getElementById('polling-row').style.display = 'none';
+          document.getElementById('watching-row').style.display = 'none';
         }
       } catch {}
-    }, 1500);
+    }, 2000); // 2 seconds — not too aggressive
   }
 
-  function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-
-  function setStep(n) {
-    [1,2,3].forEach(i => {
-      document.getElementById(`st${i}`).className = `step ${i<n?'done':i===n?'active':'waiting'}`;
-      const l = document.getElementById(`sl${i}`);
-      if (l) l.className = `step-line${i<n?' done':''}`;
-    });
-  }
+  function stopPolling() { if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
 
   function copyLink() {
     const val = document.getElementById('share-url').value;
     navigator.clipboard.writeText(val).then(()=>toast.success('Link copied!'));
   }
 
-  function shareLink() {
-    const val = document.getElementById('share-url').value;
+  function nativeShare() {
+    const url = checkoutUrl || document.getElementById('share-url').value;
     if (navigator.share) {
-      navigator.share({ title: 'SETTL Payment', text: 'Pay via SETTL', url: val }).catch(()=>{});
-    } else {
-      copyLink();
-    }
+      navigator.share({ title: 'SETTL Payment', url }).catch(()=>{});
+    } else { copyLink(); }
   }
 
   function newPayment() {

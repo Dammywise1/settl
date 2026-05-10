@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL — API Keys</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">API Keys</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- How to use -->
+      <div class="card" style="max-width:640px;">
+        <div class="card-title-row"><h2>Programmatic access</h2></div>
+        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;">
+          Use API keys to create payment sessions from your own backend without logging in.
+          Add the key as an <code>x-api-key</code> header.
+        </p>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px;font-size:12px;font-family:var(--font-mono);line-height:1.8;overflow-x:auto;">
+          <span style="color:var(--text-muted);"># Create a payment session</span><br/>
+          curl -X POST https://your-settl.com/api/pay/charge \<br/>
+          &nbsp;&nbsp;-H "x-api-key: sk_live_..." \<br/>
+          &nbsp;&nbsp;-H "Content-Type: application/json" \<br/>
+          &nbsp;&nbsp;-d '{"amount": 25.00, "message": "Order #1234"}'<br/>
+          <br/>
+          <span style="color:var(--text-muted);"># Response includes:</span><br/>
+          <span style="color:var(--teal);">{ "checkout_url": "...", "reference": "...", "url": "solana:..." }</span><br/>
+          <br/>
+          <span style="color:var(--text-muted);"># Poll for confirmation (no auth needed)</span><br/>
+          curl https://your-settl.com/api/pay/status/:reference
+        </div>
+      </div>
+
+      <!-- Create key -->
+      <div class="card" style="max-width:640px;">
+        <div class="card-title-row"><h2>Create new key</h2></div>
+        <div style="display:flex;gap:10px;">
+          <input class="form-input" id="key-name" placeholder="e.g. Production backend, Test server" style="flex:1;"/>
+          <button class="btn btn-primary" onclick="createKey()" style="white-space:nowrap;">Create key</button>
+        </div>
+        <div class="form-hint" style="margin-top:8px;">Max 5 active keys per merchant.</div>
+      </div>
+
+      <!-- Key reveal modal -->
+      <div class="modal-wrap" id="key-modal">
+        <div class="modal-box">
+          <div class="modal-header">
+            <span class="modal-title">Your new API key</span>
+          </div>
+          <div class="alert alert-warning" style="margin-bottom:16px;">
+            This key will only be shown once. Copy it now and store it securely like a password.
+          </div>
+          <div class="form-group">
+            <label class="form-label">API key</label>
+            <div style="display:flex;gap:8px;">
+              <input class="form-input" id="key-val" readonly style="font-family:var(--font-mono);font-size:12px;flex:1;"/>
+              <button class="btn btn-secondary" onclick="copyKey()">Copy</button>
+            </div>
+          </div>
+          <div class="form-hint">Use this as the <code>x-api-key</code> header in your requests.</div>
+          <button class="btn btn-primary btn-full" style="margin-top:16px;" onclick="closeKeyModal()">
+            I've saved my key
+          </button>
+        </div>
+      </div>
+
+      <!-- Keys list -->
+      <div class="card" style="max-width:640px;">
+        <div class="card-title-row"><h2>Active keys</h2><button class="btn btn-secondary btn-sm" onclick="loadKeys()">Refresh</button></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Key prefix</th><th>Last used</th><th>Created</th><th>Action</th></tr></thead>
+            <tbody id="keys-tbody">
+              <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  initSidebar();
+
+  async function createKey() {
+    const name = document.getElementById('key-name').value.trim();
+    if (!name) { toast.error('Enter a name for the key'); return; }
+    try {
+      const result = await api.apikeys.create(name);
+      document.getElementById('key-val').value = result.key;
+      document.getElementById('key-modal').classList.add('show');
+      document.getElementById('key-name').value = '';
+      loadKeys();
+    } catch(err) { toast.error(err.message); }
+  }
+
+  function copyKey() {
+    navigator.clipboard.writeText(document.getElementById('key-val').value)
+      .then(()=>toast.success('Key copied!'));
+  }
+  function closeKeyModal() { document.getElementById('key-modal').classList.remove('show'); }
+
+  async function loadKeys() {
+    const tbody = document.getElementById('keys-tbody');
+    try {
+      const { keys } = await api.apikeys.list();
+      const active = keys.filter(k => k.is_active);
+      if (!active.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-hint);">No API keys yet. Create one above.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = active.map(k => `<tr>
+        <td style="font-weight:500;">${k.name}</td>
+        <td style="font-family:var(--font-mono);font-size:12px;">${k.key_prefix}••••••••••••••••</td>
+        <td style="font-size:12px;color:var(--text-muted);">${k.last_used_at ? new Date(k.last_used_at).toLocaleString() : 'Never'}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${new Date(k.created_at).toLocaleDateString()}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="revokeKey('${k.id}','${k.name}')">Revoke</button></td>
+      </tr>`).join('');
+    } catch(err) { toast.error(err.message); }
+  }
+
+  async function revokeKey(id, name) {
+    if (!confirm(`Revoke "${name}"? Any app using this key will stop working immediately.`)) return;
+    try {
+      await api.apikeys.revoke(id);
+      toast.success('Key revoked');
+      loadKeys();
+    } catch(err) { toast.error(err.message); }
+  }
+
+  loadKeys();
+</script>
+</body>
+</html>

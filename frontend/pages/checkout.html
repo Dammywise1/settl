@@ -1,248 +1,282 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>SETTL — Pay</title>
   <link rel="stylesheet" href="/css/app.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
-    body { background: #F0EFF8; }
-    .pay-header { text-align: center; padding: 24px 16px 0; }
-    .pay-logo   { font-size: 20px; font-weight: 700; color: var(--brand); margin-bottom: 4px; }
-    .pay-sub    { font-size: 13px; color: var(--text-muted); }
+    body { background: #EEEDF8; }
+    .pay-top  { text-align:center; padding: 20px 16px 0; }
+    .pay-logo { font-size:20px; font-weight:700; color:var(--brand); }
+    .pay-sub  { font-size:12px; color:var(--text-muted); margin-top:2px; }
   </style>
 </head>
 <body>
-<div class="pay-header">
+
+<div class="pay-top">
   <div class="pay-logo">SETTL</div>
-  <div class="pay-sub">Secure Solana payment</div>
+  <div class="pay-sub">Solana payment · Powered by SETTL</div>
 </div>
 
-<div class="checkout-wrap" style="padding-top:12px;">
+<div class="checkout-wrap" style="padding-top:10px;">
   <div class="checkout-card">
 
     <!-- Loading -->
-    <div id="v-loading" style="text-align:center;padding:32px 0;">
-      <div class="spinner" style="width:28px;height:28px;margin:0 auto 12px;"></div>
-      <div style="color:var(--text-muted);font-size:14px;">Loading payment details…</div>
+    <div id="v-loading" style="text-align:center;padding:40px 0;">
+      <div class="spinner" style="width:28px;height:28px;margin:0 auto 14px;"></div>
+      <div style="color:var(--text-muted);">Loading payment…</div>
     </div>
 
     <!-- Error -->
-    <div id="v-error" style="display:none;">
-      <div class="alert alert-error" id="err-msg"></div>
-      <p style="font-size:13px;color:var(--text-muted);">This payment link may be invalid or expired.</p>
+    <div id="v-error" style="display:none;padding:16px 0;">
+      <div class="alert alert-error" id="v-err-msg"></div>
+      <div style="font-size:13px;color:var(--text-muted);">
+        This link may be invalid or expired. Ask the merchant to generate a new one.
+      </div>
     </div>
 
-    <!-- Payment -->
+    <!-- Expired -->
+    <div id="v-expired" style="display:none;text-align:center;padding:20px 0;">
+      <div style="font-size:36px;margin-bottom:10px;">⏱</div>
+      <div style="font-weight:600;font-size:16px;margin-bottom:6px;">Payment link expired</div>
+      <div style="font-size:13px;color:var(--text-muted);">Links are valid for 30 minutes. Ask the merchant to generate a new one.</div>
+    </div>
+
+    <!-- Already confirmed -->
+    <div id="v-done" style="display:none;text-align:center;padding:20px 0;">
+      <div style="font-size:52px;margin-bottom:12px;">✓</div>
+      <div style="font-size:20px;font-weight:700;color:var(--teal);margin-bottom:6px;">Payment complete</div>
+      <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;">This payment has already been confirmed on-chain.</div>
+      <a id="v-done-tx" href="#" target="_blank" class="btn btn-secondary btn-sm">View on Solana Explorer</a>
+    </div>
+
+    <!-- Main payment view -->
     <div id="v-pay" style="display:none;">
 
-      <!-- Merchant + amount -->
-      <div style="text-align:center;margin-bottom:20px;">
-        <div style="font-size:13px;color:var(--text-muted);margin-bottom:4px;">Payment to</div>
-        <div style="font-size:18px;font-weight:700;" id="c-merchant"></div>
-      </div>
-
-      <div id="c-amount-fixed" style="display:none;">
-        <div class="checkout-amount" id="c-amount-val"></div>
-        <div class="checkout-label">AUDD · Solana Devnet</div>
-      </div>
-      <div id="c-amount-open" style="display:none;margin-bottom:16px;">
-        <div class="form-group">
-          <label class="form-label" style="text-align:center;display:block;">Enter amount (AUDD)</label>
-          <input class="form-input" id="c-amount-input" type="number" min="0.01" step="0.01" placeholder="0.00" style="font-size:22px;font-weight:700;text-align:center;"/>
+      <!-- Merchant & amount -->
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:4px;">Pay to</div>
+        <div style="font-size:20px;font-weight:700;" id="c-merchant-name"></div>
+        <div id="c-amount-block" style="display:none;">
+          <div style="font-size:40px;font-weight:800;color:var(--brand);margin:8px 0 2px;" id="c-amount-val"></div>
+          <div style="font-size:13px;color:var(--text-muted);">AUDD · Solana Devnet</div>
+        </div>
+        <div id="c-open-block" style="display:none;margin:10px 0;">
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Enter amount to pay (AUDD)</div>
+          <input class="form-input" id="c-open-amount" type="number" min="0.01" step="0.01"
+                 placeholder="0.00" style="font-size:26px;font-weight:700;text-align:center;"/>
         </div>
       </div>
 
-      <div id="c-message" style="display:none;text-align:center;margin-bottom:16px;font-size:13px;color:var(--text-muted);"></div>
+      <!-- Message / reference -->
+      <div id="c-msg-row" style="display:none;text-align:center;margin-bottom:14px;">
+        <span style="font-size:13px;color:var(--text-muted);" id="c-msg-val"></span>
+      </div>
 
       <!-- Steps -->
-      <div class="steps" style="margin:16px 0 8px;">
+      <div class="steps" style="margin-bottom:8px;">
         <div class="step active"  id="cs1">1</div><div class="step-line" id="csl1"></div>
         <div class="step waiting" id="cs2">2</div><div class="step-line" id="csl2"></div>
         <div class="step waiting" id="cs3">✓</div>
       </div>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;" id="c-step-label">Scan the QR code with your Solana wallet app</p>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;text-align:center;" id="c-step-msg">
+        Scan the QR code with your Solana wallet app
+      </div>
 
-      <!-- QR code -->
-      <div class="qr-wrap" id="c-qr-wrap" style="margin-bottom:20px;">
+      <!-- QR -->
+      <div class="qr-wrap" id="c-qr-section" style="margin-bottom:18px;">
         <div id="c-qr-canvas"></div>
-        <div style="text-align:center;font-size:12px;color:var(--text-muted);">Phantom · Backpack · Solflare</div>
-      </div>
-
-      <!-- Manual / deep link fallback -->
-      <div style="border-top:1px solid var(--border);padding-top:16px;">
-        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Can't scan? Pay manually</div>
-        <div class="info-grid" style="margin-bottom:12px;">
-          <span class="info-label">Vault</span>
-          <span class="info-value" id="c-vault" style="cursor:pointer;" onclick="copyVault()" title="Tap to copy"></span>
-          <span class="info-label">Token</span>
-          <span class="info-value" id="c-token"></span>
-          <span class="info-label">Amount</span>
-          <span class="info-value n" id="c-amount-info"></span>
+        <div style="text-align:center;font-size:12px;color:var(--text-muted);">
+          Phantom · Backpack · Solflare · any Solana wallet
         </div>
-        <a id="c-phantom-link" href="#" class="btn btn-primary btn-full" style="margin-bottom:8px;">
-          Open in Phantom
-        </a>
-        <button class="btn btn-secondary btn-full" onclick="copyVault()">📋 Copy vault address</button>
       </div>
 
-      <!-- Polling -->
-      <div id="c-polling" style="display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:13px;margin-top:16px;">
-        <div class="spinner"></div><span>Watching for your payment…</span>
+      <!-- Watching indicator -->
+      <div id="c-watching" style="display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text-muted);font-size:13px;margin-bottom:18px;">
+        <div class="spinner"></div>
+        <span>Watching for your payment on-chain…</span>
       </div>
 
-      <!-- Confirmed -->
+      <!-- Confirmed banner -->
       <div id="c-confirmed" style="display:none;" class="alert alert-success">
-        <div style="font-size:18px;font-weight:700;margin-bottom:6px;">✓ Payment confirmed!</div>
-        <div style="font-size:13px;">Your payment has been received and will be released to the merchant at 6am UTC.</div>
-        <a id="c-tx-link" href="#" target="_blank" style="display:block;font-size:11px;font-family:var(--font-mono);margin-top:8px;word-break:break-all;color:var(--teal);"></a>
+        <div style="font-size:17px;font-weight:700;margin-bottom:6px;">✓ Payment confirmed!</div>
+        <div style="font-size:13px;">Received and verified on Solana. The merchant will receive funds at 6am UTC.</div>
+        <a id="c-conf-tx" href="#" target="_blank"
+           style="display:block;font-size:11px;font-family:var(--font-mono);margin-top:8px;word-break:break-all;color:var(--teal);"></a>
+      </div>
+
+      <!-- Divider -->
+      <div style="border-top:1px solid var(--border);margin:16px 0;"></div>
+
+      <!-- Manual payment section -->
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">
+          Can't scan? Pay manually
+        </div>
+        <div class="info-grid" style="margin-bottom:14px;">
+          <span class="info-label">Vault</span>
+          <span id="c-vault-short" style="font-family:var(--font-mono);font-size:12px;cursor:pointer;color:var(--brand);" onclick="copyVault()" title="Tap to copy vault address"></span>
+          <span class="info-label">Token</span>
+          <span id="c-token-short" style="font-family:var(--font-mono);font-size:12px;" title="AUDD mint address"></span>
+          <span class="info-label">Network</span>
+          <span style="font-size:13px;">Solana Devnet</span>
+        </div>
+
+        <a id="c-phantom-btn" href="#" class="btn btn-primary btn-full" style="margin-bottom:8px;">
+          Open in Phantom wallet
+        </a>
+        <button class="btn btn-secondary btn-full" onclick="copyVault()">
+          📋 Copy vault address
+        </button>
+        <div style="font-size:11px;color:var(--text-hint);margin-top:8px;text-align:center;">
+          Send exactly the amount shown above in AUDD to the vault address
+        </div>
       </div>
 
     </div>
 
-    <!-- Expired -->
-    <div id="v-expired" style="display:none;text-align:center;padding:16px 0;">
-      <div style="font-size:32px;margin-bottom:8px;">⏱</div>
-      <div style="font-weight:600;margin-bottom:6px;">Payment link expired</div>
-      <div style="font-size:13px;color:var(--text-muted);">This link was valid for 30 minutes. Ask the merchant to generate a new one.</div>
-    </div>
-
-    <!-- Already confirmed -->
-    <div id="v-done" style="display:none;text-align:center;padding:16px 0;">
-      <div style="font-size:48px;margin-bottom:12px;">✓</div>
-      <div style="font-size:18px;font-weight:700;color:var(--teal);margin-bottom:6px;">Payment complete</div>
-      <div style="font-size:13px;color:var(--text-muted);">This payment has already been confirmed on-chain.</div>
-    </div>
-
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:var(--text-hint);">
-      Secured by SETTL · Powered by Solana
-    </div>
   </div>
 </div>
 
 <script src="/js/modules/api.js"></script>
 <script>
-  const params   = new URLSearchParams(window.location.search);
-  const ref      = params.get('ref');
-  let pollTimer  = null;
-  let solanaPayUrl = null;
+  const params     = new URLSearchParams(window.location.search);
+  const ref        = params.get('ref');
+  let pollTimer    = null;
+  let vaultAddress = null;
 
-  function show(id) {
-    ['v-loading','v-error','v-pay','v-expired','v-done'].forEach(v =>
-      document.getElementById(v).style.display = v===id ? '' : 'none'
-    );
-  }
+  // ── show/hide views ──────────────────────────────────────
+  const VIEWS = ['v-loading','v-error','v-pay','v-expired','v-done'];
+  function show(id) { VIEWS.forEach(v => document.getElementById(v).style.display = v===id?'':'none'); }
 
   function setStep(n) {
     [1,2,3].forEach(i => {
-      document.getElementById(`cs${i}`).className=`step ${i<n?'done':i===n?'active':'waiting'}`;
-      const l=document.getElementById(`csl${i}`);
-      if(l) l.className=`step-line${i<n?' done':''}`;
+      document.getElementById(`cs${i}`).className = `step ${i<n?'done':i===n?'active':'waiting'}`;
+      const l = document.getElementById(`csl${i}`);
+      if (l) l.className = `step-line${i<n?' done':''}`;
     });
   }
 
-  function shortKey(k) { return k?k.slice(0,10)+'…'+k.slice(-6):'—'; }
+  function shortAddr(k, pre=8, suf=6) { return k ? k.slice(0,pre)+'…'+k.slice(-suf) : '—'; }
 
   function copyVault() {
-    const vault = document.getElementById('c-vault').dataset.full;
-    if (!vault) return;
-    navigator.clipboard.writeText(vault).then(()=>{
-      document.getElementById('c-vault').textContent = '✓ Copied!';
-      setTimeout(()=>document.getElementById('c-vault').textContent=shortKey(vault),2000);
+    if (!vaultAddress) return;
+    navigator.clipboard.writeText(vaultAddress).then(() => {
+      const el = document.getElementById('c-vault-short');
+      const orig = el.textContent;
+      el.textContent = '✓ Copied!';
+      setTimeout(() => el.textContent = orig, 2000);
     });
   }
 
+  // ── main load ────────────────────────────────────────────
   async function load() {
-    if (!ref) { show('v-error'); document.getElementById('err-msg').textContent='No payment reference in URL.'; return; }
+    if (!ref) {
+      show('v-error');
+      document.getElementById('v-err-msg').textContent = 'No payment reference found in URL.';
+      return;
+    }
 
     try {
+      // sessionInfo is a plain public fetch — no auth needed
       const session = await api.payments.sessionInfo(ref);
 
-      if (session.status === 'confirmed') { show('v-done'); return; }
-      if (session.status === 'expired')   { show('v-expired'); return; }
+      // Already resolved
+      if (session.status === 'confirmed') {
+        show('v-done');
+        const txLink = document.getElementById('v-done-tx');
+        txLink.href = `https://explorer.solana.com/tx/${session.tx_signature}?cluster=devnet`;
+        return;
+      }
+      if (session.status === 'expired') { show('v-expired'); return; }
 
+      // Show payment view
       show('v-pay');
 
-      document.getElementById('c-merchant').textContent = session.merchant_name || 'Merchant';
+      document.getElementById('c-merchant-name').textContent = session.merchant_name || 'Merchant';
 
       const amount = session.amount ? Number(session.amount) : null;
 
-      // Build Solana Pay URL
-      const encodedFields = new URLSearchParams();
-      if (session.spl_token) encodedFields.set('spl-token', session.spl_token);
-      encodedFields.set('reference', session.reference_key);
-      if (session.label)   encodedFields.set('label',   session.label);
-      if (session.message) encodedFields.set('message', session.message);
-      if (amount)          encodedFields.set('amount',  amount.toString());
-      solanaPayUrl = `solana:${session.vault_address}?${encodedFields.toString()}`;
-
       if (amount !== null) {
-        document.getElementById('c-amount-fixed').style.display = '';
+        document.getElementById('c-amount-block').style.display = '';
         document.getElementById('c-amount-val').textContent     = amount.toFixed(2) + ' AUDD';
-        document.getElementById('c-amount-info').textContent    = amount.toFixed(2) + ' AUDD';
       } else {
-        document.getElementById('c-amount-open').style.display  = '';
-        document.getElementById('c-amount-info').textContent    = 'Open amount';
+        document.getElementById('c-open-block').style.display = '';
       }
 
       if (session.message) {
-        document.getElementById('c-message').textContent  = session.message;
-        document.getElementById('c-message').style.display = '';
+        document.getElementById('c-msg-row').style.display = '';
+        document.getElementById('c-msg-val').textContent   = session.message;
       }
 
-      // Vault info
-      const vault = session.vault_address || '';
-      document.getElementById('c-vault').textContent     = shortKey(vault);
-      document.getElementById('c-vault').dataset.full    = vault;
-      document.getElementById('c-token').textContent     = shortKey(session.spl_token);
-      document.getElementById('c-token').title           = session.spl_token || '';
+      // Vault + token
+      vaultAddress = session.vault_address;
+      document.getElementById('c-vault-short').textContent = shortAddr(vaultAddress);
+      document.getElementById('c-vault-short').title       = vaultAddress || '';
+      document.getElementById('c-token-short').textContent = shortAddr(session.spl_token);
+      document.getElementById('c-token-short').title       = session.spl_token || '';
 
-      // QR code
-      document.getElementById('c-qr-canvas').innerHTML = '';
-      if (solanaPayUrl) {
+      // QR code — use the solana_pay_url from server (already built correctly)
+      const qrContent = session.solana_pay_url;
+      if (qrContent) {
+        document.getElementById('c-qr-canvas').innerHTML = '';
         new QRCode(document.getElementById('c-qr-canvas'), {
-          text: solanaPayUrl, width: 200, height: 200,
-          colorDark: '#111827', colorLight: '#ffffff',
+          text:         qrContent,
+          width:        200,
+          height:       200,
+          colorDark:    '#111827',
+          colorLight:   '#ffffff',
           correctLevel: QRCode.CorrectLevel.M,
         });
       }
 
       // Phantom deep link
-      const phantomUrl = `https://phantom.app/ul/v1/send?to=${vault}&spl-token=${session.spl_token}${amount?'&amount='+amount:''}`;
-      document.getElementById('c-phantom-link').href = phantomUrl;
+      const phantomUrl = `https://phantom.app/ul/v1/send?to=${encodeURIComponent(vaultAddress)}&spl-token=${encodeURIComponent(session.spl_token)}${amount?'&amount='+amount:''}`;
+      document.getElementById('c-phantom-btn').href = phantomUrl;
 
       // Start polling
       setStep(2);
-      document.getElementById('c-step-label').textContent = 'Waiting for your transaction to confirm…';
+      document.getElementById('c-step-msg').textContent = 'Waiting for your transaction to confirm on-chain…';
       startPolling();
 
-    } catch(err) {
+    } catch (err) {
       show('v-error');
-      document.getElementById('err-msg').textContent = err.message || 'Failed to load payment details.';
+      document.getElementById('v-err-msg').textContent = err.message || 'Failed to load payment details.';
     }
   }
 
+  // ── polling ──────────────────────────────────────────────
   function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(async () => {
       try {
+        // pollPublic = plain fetch, no auth header
         const r = await api.payments.pollPublic(ref);
+
         if (r.status === 'confirmed') {
           clearInterval(pollTimer);
           setStep(3);
-          document.getElementById('c-step-label').textContent    = 'Payment received!';
-          document.getElementById('c-polling').style.display     = 'none';
-          document.getElementById('c-confirmed').style.display   = '';
-          document.getElementById('c-qr-wrap').style.display     = 'none';
-          const txLink = document.getElementById('c-tx-link');
-          txLink.href = `https://explorer.solana.com/tx/${r.tx}?cluster=devnet`;
-          txLink.textContent = 'View on Solana Explorer →';
+          document.getElementById('c-step-msg').textContent     = 'Payment received!';
+          document.getElementById('c-watching').style.display   = 'none';
+          document.getElementById('c-confirmed').style.display  = '';
+          document.getElementById('c-qr-section').style.display = 'none';
+
+          const txLink = document.getElementById('c-conf-tx');
+          txLink.href        = `https://explorer.solana.com/tx/${r.tx}?cluster=devnet`;
+          txLink.textContent = `${r.tx?.slice(0,20)}… → View on Solana Explorer`;
+
         } else if (r.status === 'expired') {
           clearInterval(pollTimer);
           show('v-expired');
         }
-      } catch {}
-    }, 1500);
+        // 'pending' → keep polling silently
+      } catch (err) {
+        // Network error — keep polling, don't crash
+        console.warn('[checkout poll]', err.message);
+      }
+    }, 2000); // 2s interval — gentle on the RPC
   }
 
   load();

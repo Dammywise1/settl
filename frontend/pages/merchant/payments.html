@@ -10,20 +10,32 @@
 <div class="app-shell">
   <nav class="sidebar" id="sidebar"></nav>
   <div class="main-content">
+
     <div class="topbar">
-      <div class="topbar-left"><button class="menu-btn" onclick="openSidebar()">☰</button><span class="topbar-title">Payments</span></div>
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Payments</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
     </div>
+
     <div class="page-body">
       <div class="card-grid">
         <div class="card"><div class="card-title">Total gross</div><div class="card-value" id="s-gross">—</div><div class="card-sub">AUDD collected</div></div>
         <div class="card"><div class="card-title">Net received</div><div class="card-value" id="s-net">—</div><div class="card-sub">After 1.5% fee</div></div>
         <div class="card"><div class="card-title">Fees paid</div><div class="card-value" id="s-fee">—</div><div class="card-sub">To SETTL</div></div>
-        <div class="card"><div class="card-title">Next release</div><div class="card-value" id="s-next">—</div><div class="card-sub">6am UTC</div></div>
+        <div class="card"><div class="card-title">Next release</div><div class="card-value" id="s-next">—</div><div class="card-sub">6am UTC daily</div></div>
       </div>
 
       <!-- Payment sessions -->
       <div class="card">
-        <div class="card-title-row"><h2>Payment sessions</h2><a href="/pages/merchant/paylink.html" class="btn btn-primary btn-sm">+ New</a></div>
+        <div class="card-title-row">
+          <h2>Payment sessions</h2>
+          <div style="display:flex;gap:8px;">
+            <span id="realtime-dot" style="font-size:11px;color:var(--text-hint);">● connecting</span>
+            <a href="/pages/merchant/paylink.html" class="btn btn-primary btn-sm">+ New</a>
+          </div>
+        </div>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Amount</th><th>Message</th><th>Status</th><th>Created</th><th>Checkout link</th></tr></thead>
@@ -53,22 +65,120 @@
 <script>
   if (!auth.requireAuth()) throw 0;
   initSidebar();
+
   const EX='https://explorer.solana.com/tx/', CL='?cluster=devnet';
-  const fmtA = v => v!=null?Number(v).toFixed(4)+' AUDD':'—';
+  const fmtA = v => v!=null ? Number(v).toFixed(4)+' AUDD' : '—';
+  function shortKey(k) { return k ? k.slice(0,6)+'…'+k.slice(-4) : '—'; }
   function nextRelease() {
     const now=new Date(),next=new Date(); next.setUTCHours(6,0,0,0);
     if(next<=now) next.setUTCDate(next.getUTCDate()+1);
     const d=next-now,h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000);
     return `${h}h ${m}m`;
   }
-  function shortKey(k) { return k?k.slice(0,6)+'…'+k.slice(-4):'—'; }
 
-  async function load() {
+  // ── Supabase Realtime subscription ────────────────────────
+  // Live balance updates when payment_sessions table changes
+  function initRealtime() {
+    const anonKey = window.__SUPABASE_ANON_KEY__;
+    const url     = window.__SUPABASE_URL__;
+    if (!anonKey || !url) {
+      document.getElementById('realtime-dot').textContent = '● offline';
+      return;
+    }
+
+    // Simple Supabase Realtime via websocket
+    const wsUrl = `${url.replace('https','wss')}/realtime/v1/websocket?apikey=${anonKey}&vsn=1.0.0`;
+    const ws    = new WebSocket(wsUrl);
+    let heartbeat;
+
+    ws.onopen = () => {
+      document.getElementById('realtime-dot').style.color = 'var(--teal)';
+      document.getElementById('realtime-dot').textContent = '● live';
+
+      // Subscribe to payment_sessions changes
+      ws.send(JSON.stringify({
+        topic: 'realtime:public:payment_sessions',
+        event: 'phx_join',
+        payload: { config: { broadcast: { self: false }, presence: { key: '' }, postgres_changes: [{ event: '*', schema: 'public', table: 'payment_sessions' }] } },
+        ref: '1',
+      }));
+
+      heartbeat = setInterval(() => ws.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: '0' })), 25000);
+    };
+
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.event === 'postgres_changes' || (msg.payload?.data?.type && ['INSERT','UPDATE'].includes(msg.payload.data.type))) {
+          // Reload data when a payment session changes
+          loadData();
+        }
+      } catch {}
+    };
+
+    ws.onerror = () => {
+      document.getElementById('realtime-dot').textContent = '● error';
+      document.getElementById('realtime-dot').style.color = 'var(--coral)';
+    };
+
+    ws.onclose = () => {
+      clearInterval(heartbeat);
+      document.getElementById('realtime-dot').textContent = '● disconnected';
+      document.getElementById('realtime-dot').style.color = 'var(--text-hint)';
+      // Reconnect after 5s
+      setTimeout(initRealtime, 5000);
+    };
+  }
+
+  // ── CSV export ─────────────────────────────────────────────
+  async function exportCSV() {
+    try {
+      const [{ sessions }, { logs }] = await Promise.all([
+        api.merchant.sessions(), api.merchant.releases(),
+      ]);
+
+      const rows = [
+        ['Type','Date','Amount (AUDD)','Fee (AUDD)','Net (AUDD)','Status','Reference/TX','Message'],
+        ...sessions.map(s => [
+          'deposit',
+          new Date(s.created_at).toISOString(),
+          s.amount != null ? Number(s.amount).toFixed(4) : '',
+          '', '',
+          s.status,
+          s.reference_key,
+          s.message || '',
+        ]),
+        ...logs.map(r => [
+          'release',
+          new Date(r.released_at).toISOString(),
+          Number(r.gross).toFixed(4),
+          Number(r.fee).toFixed(4),
+          Number(r.net).toFixed(4),
+          r.status,
+          r.tx_signature || '',
+          '',
+        ]),
+      ];
+
+      const csv  = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `settl-payments-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('CSV exported!');
+    } catch(err) { toast.error('Export failed: ' + err.message); }
+  }
+
+  async function loadData() {
     document.getElementById('s-next').textContent = nextRelease();
     try {
-      const [{ sessions }, { logs }] = await Promise.all([api.merchant.sessions(), api.merchant.releases()]);
+      const [{ sessions }, { logs }] = await Promise.all([
+        api.merchant.sessions(), api.merchant.releases(),
+      ]);
 
-      // Stats from release logs
       const totalGross = logs.reduce((s,r)=>s+Number(r.gross||0),0);
       const totalNet   = logs.reduce((s,r)=>s+Number(r.net  ||0),0);
       const totalFee   = logs.reduce((s,r)=>s+Number(r.fee  ||0),0);
@@ -76,23 +186,21 @@
       document.getElementById('s-net').textContent   = totalNet.toFixed(4)+' AUDD';
       document.getElementById('s-fee').textContent   = totalFee.toFixed(4)+' AUDD';
 
-      // Sessions table
       const sb = document.getElementById('sess-tbody');
       sb.innerHTML = sessions.length ? sessions.map(s=>`<tr>
         <td style="font-weight:600;">${s.amount!=null?Number(s.amount).toFixed(2)+' AUDD':'Open'}</td>
-        <td style="color:var(--text-muted);font-size:12px;">${s.message||'—'}</td>
+        <td style="color:var(--text-muted);font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.message||'—'}</td>
         <td><span class="badge ${s.status==='confirmed'?'badge-success':s.status==='pending'?'badge-pending':'badge-error'}">${s.status}</span></td>
         <td style="font-size:12px;color:var(--text-muted);">${new Date(s.created_at).toLocaleString()}</td>
         <td>
           <div style="display:flex;gap:6px;">
             <a href="/pages/checkout.html?ref=${s.reference_key}" target="_blank" class="btn btn-secondary btn-sm">Open</a>
-            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${location.origin}/pages/checkout.html?ref=${s.reference_key}').then(()=>toast.success('Copied!'))">Copy</button>
+            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(location.origin+'/pages/checkout.html?ref=${s.reference_key}').then(()=>toast.success('Copied!'))">Copy</button>
           </div>
         </td>
       </tr>`).join('')
-      : `<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--text-hint);">No payment sessions yet — <a href="/pages/merchant/paylink.html">create one</a></td></tr>`;
+      : `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-hint);">No sessions yet — <a href="/pages/merchant/paylink.html">create one</a></td></tr>`;
 
-      // Releases table
       const rb = document.getElementById('rel-tbody');
       rb.innerHTML = logs.length ? logs.map(r=>`<tr>
         <td style="font-size:12px;">${new Date(r.released_at).toLocaleString()}</td>
@@ -103,12 +211,22 @@
         <td>${r.tx_signature?`<a href="${EX}${r.tx_signature}${CL}" target="_blank" style="font-family:var(--font-mono);font-size:11px;">${shortKey(r.tx_signature)}</a>`:'—'}</td>
       </tr>`).join('')
       : `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">No releases yet — first at 6am UTC</td></tr>`;
-
-    } catch(err) { toast.error(err.message); }
+    } catch(err) { console.error(err); }
   }
 
-  load();
-  setInterval(()=>document.getElementById('s-next').textContent=nextRelease(),60000);
+  // Inject Supabase config for Realtime (server renders this in a script tag via frontend serving)
+  // We read from meta tags set by the app
+  window.__SUPABASE_URL__      = ''; // Set from .env on build, or use inline config
+  window.__SUPABASE_ANON_KEY__ = ''; // Set from .env on build
+
+  // Try to get from a config endpoint
+  fetch('/api/health').then(r=>r.json()).then(d=>{
+    // Health endpoint can expose public config
+  }).catch(()=>{});
+
+  loadData();
+  initRealtime();
+  setInterval(()=>document.getElementById('s-next').textContent=nextRelease(), 60000);
 </script>
 </body>
 </html>

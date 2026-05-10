@@ -1,9 +1,11 @@
 const NAV = [
-  { label: 'Dashboard',     href: '/pages/dashboard.html',        icon: '◈' },
-  { label: 'Create payment',href: '/pages/merchant/paylink.html', icon: '⊕' },
-  { label: 'Payments',      href: '/pages/merchant/payments.html',icon: '↑' },
-  { label: 'Balance',       href: '/pages/merchant/balance.html', icon: '$' },
-  { label: 'Settings',      href: '/pages/merchant/settings.html',icon: '⚙' },
+  { label: 'Dashboard',      href: '/pages/dashboard.html',           icon: '◈' },
+  { label: 'Create payment', href: '/pages/merchant/paylink.html',    icon: '⊕' },
+  { label: 'Payments',       href: '/pages/merchant/payments.html',   icon: '↑' },
+  { label: 'Balance',        href: '/pages/merchant/balance.html',    icon: '$' },
+  { label: 'Webhooks',       href: '/pages/merchant/webhooks.html',   icon: '⌁' },
+  { label: 'API keys',       href: '/pages/merchant/apikeys.html',    icon: '⌘' },
+  { label: 'Settings',       href: '/pages/merchant/settings.html',   icon: '⚙' },
 ];
 
 function initSidebar() {
@@ -18,7 +20,7 @@ function initSidebar() {
   sidebar.innerHTML = `
     <div class="sidebar-logo">
       <span>SETTL</span>
-      <button class="modal-close" id="sidebar-close" onclick="closeSidebar()" style="font-size:22px;">×</button>
+      <button class="modal-close" onclick="closeSidebar()" style="font-size:22px;display:block;" id="sb-close">×</button>
     </div>
     <div class="sidebar-section">Merchant</div>
     ${NAV.map(item => {
@@ -37,14 +39,20 @@ function initSidebar() {
     </div>`;
 
   if (overlay) overlay.onclick = closeSidebar;
+
+  // Load Supabase config for Realtime
+  fetch('/api/health').then(r=>r.json()).then(d=>{
+    if (d.config?.supabase_url)      window.__SUPABASE_URL__      = d.config.supabase_url;
+    if (d.config?.supabase_anon_key) window.__SUPABASE_ANON_KEY__ = d.config.supabase_anon_key;
+  }).catch(()=>{});
 }
 
 function openSidebar()  { document.getElementById('sidebar')?.classList.add('open');    document.getElementById('sidebar-overlay')?.classList.add('show'); }
 function closeSidebar() { document.getElementById('sidebar')?.classList.remove('open'); document.getElementById('sidebar-overlay')?.classList.remove('show'); }
 
 async function handleLogout() {
-  try { await api.auth.logout(); } catch {}
-  auth.clear();
+  try { await window.api.auth.logout(); } catch {}
+  window.auth.clear();
   window.location.href = '/pages/auth/login.html';
 }
 

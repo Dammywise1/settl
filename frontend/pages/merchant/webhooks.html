@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL — Webhooks</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Webhooks</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Info -->
+      <div class="alert alert-info" style="margin-bottom:16px;">
+        SETTL will POST to your URL on every payment confirmation and daily release.
+        Each request is signed with <code>X-SETTL-Signature: sha256=&lt;hmac&gt;</code>
+        so you can verify it's genuine.
+      </div>
+
+      <!-- Add webhook form -->
+      <div class="card">
+        <div class="card-title-row"><h2>Add webhook endpoint</h2></div>
+        <div class="form-group">
+          <label class="form-label">Endpoint URL <span style="color:var(--coral)">*</span></label>
+          <input class="form-input" id="w-url" type="url" placeholder="https://your-server.com/webhooks/settl"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description <span style="color:var(--text-hint);font-weight:400;">— optional</span></label>
+          <input class="form-input" id="w-desc" placeholder="e.g. Production order fulfilment"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Events</label>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;">
+              <input type="checkbox" id="ev-deposit" checked style="width:16px;height:16px;accent-color:var(--brand);"/>
+              deposit.confirmed
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;">
+              <input type="checkbox" id="ev-release" checked style="width:16px;height:16px;accent-color:var(--brand);"/>
+              release.completed
+            </label>
+          </div>
+        </div>
+        <div id="w-err" class="alert alert-error" style="display:none;"></div>
+        <button class="btn btn-primary" onclick="addWebhook()">Add endpoint</button>
+      </div>
+
+      <!-- Secret modal -->
+      <div class="modal-wrap" id="secret-modal">
+        <div class="modal-box">
+          <div class="modal-header">
+            <span class="modal-title">Signing secret — save this now</span>
+            <button class="modal-close" onclick="closeSecretModal()">×</button>
+          </div>
+          <div class="alert alert-warning" style="margin-bottom:16px;">
+            This secret will only be shown once. Copy it now and store it securely.
+          </div>
+          <div class="form-group">
+            <label class="form-label">Signing secret</label>
+            <div style="display:flex;gap:8px;">
+              <input class="form-input" id="secret-val" readonly style="font-family:var(--font-mono);font-size:12px;flex:1;"/>
+              <button class="btn btn-secondary" onclick="copySecret()">Copy</button>
+            </div>
+          </div>
+          <div style="font-size:13px;color:var(--text-muted);line-height:1.6;">
+            <strong>Verify incoming webhooks:</strong><br/>
+            <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px;">
+              crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
+            </code><br/>
+            Compare with the <code>X-SETTL-Signature</code> header (strip the <code>sha256=</code> prefix).
+          </div>
+          <button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="closeSecretModal()">
+            I've saved the secret
+          </button>
+        </div>
+      </div>
+
+      <!-- Webhooks list -->
+      <div class="card">
+        <div class="card-title-row">
+          <h2>Active endpoints</h2>
+          <button class="btn btn-secondary btn-sm" onclick="sendTest()">Send test event</button>
+        </div>
+        <div id="webhooks-list">
+          <div style="text-align:center;padding:28px;color:var(--text-hint);">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Delivery log -->
+      <div class="card">
+        <div class="card-title-row"><h2>Delivery log</h2><button class="btn btn-secondary btn-sm" onclick="loadDeliveries()">Refresh</button></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Event</th><th>URL</th><th>Status</th><th>HTTP</th><th>Attempt</th><th>Time</th></tr></thead>
+            <tbody id="deliveries-tbody">
+              <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  initSidebar();
+
+  async function addWebhook() {
+    const url   = document.getElementById('w-url').value.trim();
+    const desc  = document.getElementById('w-desc').value.trim();
+    const events = [];
+    if (document.getElementById('ev-deposit').checked) events.push('deposit.confirmed');
+    if (document.getElementById('ev-release').checked) events.push('release.completed');
+    document.getElementById('w-err').style.display = 'none';
+
+    if (!url) { document.getElementById('w-err').textContent='URL is required'; document.getElementById('w-err').style.display=''; return; }
+    if (!events.length) { document.getElementById('w-err').textContent='Select at least one event'; document.getElementById('w-err').style.display=''; return; }
+
+    try {
+      const result = await api.webhooks.create({ url, description: desc || null, events });
+      document.getElementById('secret-val').value = result.signing_secret;
+      document.getElementById('secret-modal').classList.add('show');
+      document.getElementById('w-url').value  = '';
+      document.getElementById('w-desc').value = '';
+      loadWebhooks();
+      toast.success('Webhook added!');
+    } catch(err) {
+      document.getElementById('w-err').textContent = err.message;
+      document.getElementById('w-err').style.display = '';
+    }
+  }
+
+  function copySecret() {
+    navigator.clipboard.writeText(document.getElementById('secret-val').value)
+      .then(()=>toast.success('Secret copied!'));
+  }
+  function closeSecretModal() { document.getElementById('secret-modal').classList.remove('show'); }
+
+  async function loadWebhooks() {
+    const container = document.getElementById('webhooks-list');
+    try {
+      const { webhooks } = await api.webhooks.list();
+      if (!webhooks.length) {
+        container.innerHTML = '<div style="text-align:center;padding:28px;color:var(--text-hint);">No webhook endpoints yet. Add one above.</div>';
+        return;
+      }
+      container.innerHTML = webhooks.map(w => `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-family:var(--font-mono);font-size:13px;font-weight:500;word-break:break-all;">${w.url}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+              ${w.description||'No description'} &nbsp;·&nbsp;
+              ${w.events.map(e=>`<span class="badge badge-info" style="font-size:10px;margin-right:4px;">${e}</span>`).join('')}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <span class="badge ${w.is_active?'badge-success':'badge-error'}">${w.is_active?'Active':'Inactive'}</span>
+            <button class="btn btn-secondary btn-sm" onclick="toggleWebhook('${w.id}',${w.is_active})">${w.is_active?'Disable':'Enable'}</button>
+            <button class="btn btn-danger btn-sm"    onclick="deleteWebhook('${w.id}')">Delete</button>
+          </div>
+        </div>`).join('');
+    } catch(err) { toast.error(err.message); }
+  }
+
+  async function toggleWebhook(id, isActive) {
+    try {
+      await api.webhooks.update(id, { is_active: !isActive });
+      loadWebhooks();
+      toast.success(isActive ? 'Webhook disabled' : 'Webhook enabled');
+    } catch(err) { toast.error(err.message); }
+  }
+
+  async function deleteWebhook(id) {
+    if (!confirm('Delete this webhook? All delivery history will also be removed.')) return;
+    try {
+      await api.webhooks.delete(id);
+      loadWebhooks(); loadDeliveries();
+      toast.success('Webhook deleted');
+    } catch(err) { toast.error(err.message); }
+  }
+
+  async function sendTest() {
+    try {
+      await api.webhooks.test();
+      toast.success('Test event sent to all active webhooks');
+      setTimeout(loadDeliveries, 2000);
+    } catch(err) { toast.error(err.message); }
+  }
+
+  async function loadDeliveries() {
+    const tbody = document.getElementById('deliveries-tbody');
+    try {
+      const { deliveries } = await api.webhooks.deliveries();
+      if (!deliveries.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">No deliveries yet — send a test event above.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = deliveries.map(d => `<tr>
+        <td><span class="badge badge-info" style="font-size:10px;">${d.event}</span></td>
+        <td style="font-size:11px;font-family:var(--font-mono);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${d.webhook_configs?.url||''}">${d.webhook_configs?.url||'—'}</td>
+        <td><span class="badge ${d.status==='success'?'badge-success':d.status==='retrying'?'badge-pending':'badge-error'}">${d.status}</span></td>
+        <td style="font-size:13px;color:${d.response_code>=200&&d.response_code<300?'var(--teal)':'var(--coral)'};">${d.response_code||'—'}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${d.attempt}</td>
+        <td style="font-size:11px;color:var(--text-muted);">${new Date(d.created_at).toLocaleTimeString()}</td>
+      </tr>`).join('');
+    } catch(err) { toast.error(err.message); }
+  }
+
+  loadWebhooks();
+  loadDeliveries();
+</script>
+</body>
+</html>
