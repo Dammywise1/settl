@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>SETTL — Settings</title><link rel="stylesheet" href="/css/app.css"/></head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+    <div class="topbar"><div class="topbar-left"><button class="menu-btn" onclick="openSidebar()">☰</button><span class="topbar-title">Settings</span></div></div>
+    <div class="page-body">
+      <div class="card" style="max-width:480px;">
+        <div class="card-title-row"><h2>Account</h2></div>
+        <div class="form-group"><label class="form-label">Full name</label><input class="form-input" id="f-name" placeholder="Your name"/></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="f-email" readonly style="background:var(--bg);"/></div>
+        <div id="save-ok" class="alert alert-success" style="display:none;">Changes saved!</div>
+        <button class="btn btn-primary" onclick="save()">Save</button>
+      </div>
+      <div class="card" style="max-width:480px;">
+        <div class="card-title-row"><h2>Merchant info</h2></div>
+        <div class="info-grid" id="m-info"><span class="info-label">Loading…</span><span></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/js/modules/api.js"></script><script src="/js/modules/auth.js"></script><script src="/js/modules/toast.js"></script><script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  initSidebar();
+  const u=auth.getUser();
+  document.getElementById('f-name').value  = u?.full_name||'';
+  document.getElementById('f-email').value = u?.email||'';
+  async function save(){
+    try{
+      const res=await api.patch('/auth/profile',{full_name:document.getElementById('f-name').value});
+      if(res.user) auth.save(auth.getToken(),res.user,auth.getMerchant());
+      document.getElementById('save-ok').style.display='';
+      setTimeout(()=>document.getElementById('save-ok').style.display='none',2500);
+    }catch(err){toast.error(err.message);}
+  }
+  api.merchant.me().then(({merchant})=>{
+    if(!merchant) return;
+    document.getElementById('m-info').innerHTML=`
+      <span class="info-label">Merchant ID</span><span class="info-value n">${merchant.merchant_id}</span>
+      <span class="info-label">Wallet</span><span class="info-value">${merchant.wallet_address}</span>
+      <span class="info-label">Vault PDA</span><span class="info-value">${merchant.vault_address||'Pending…'}</span>
+      <span class="info-label">Status</span><span><span class="badge ${merchant.is_active?'badge-success':'badge-pending'}">${merchant.registration_status}</span></span>
+    `;
+  }).catch(()=>{});
+</script>
+</body></html>

@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>SETTL — Dashboard</title>
   <link rel="stylesheet" href="/css/app.css"/>
 </head>
@@ -14,28 +13,55 @@
     <div class="topbar">
       <div class="topbar-left">
         <button class="menu-btn" onclick="openSidebar()">☰</button>
-        <span class="topbar-title">Overview</span>
+        <span class="topbar-title">Dashboard</span>
       </div>
-      <span class="badge badge-info" id="mode-badge"></span>
+      <div id="reg-status-badge"></div>
     </div>
 
     <div class="page-body">
-      <div class="card-grid">
-        <div class="card"><div class="card-title">Pending</div><div class="card-value" id="s-pending">—</div><div class="card-sub">AUDD in escrow</div></div>
-        <div class="card"><div class="card-title">Payments</div><div class="card-value" id="s-payments">—</div><div class="card-sub">All time</div></div>
-        <div class="card"><div class="card-title">Next release</div><div class="card-value" id="s-release">—</div><div class="card-sub">Daily at 6am UTC</div></div>
-        <div class="card"><div class="card-title">Merchants</div><div class="card-value" id="s-merchants">—</div><div class="card-sub">Active on-chain</div></div>
+
+      <!-- Registration banner -->
+      <div id="reg-banner" style="display:none;" class="alert alert-warning">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="spinner"></div>
+          <div>
+            <strong>Registering your merchant on-chain…</strong><br/>
+            <span style="font-size:12px;">This usually takes 10–30 seconds. You can use the app while this completes.</span>
+          </div>
+        </div>
       </div>
 
+      <div id="reg-error-banner" style="display:none;" class="alert alert-error">
+        <strong>On-chain registration failed.</strong> <span id="reg-err-msg"></span>
+        <br/><a href="/pages/merchant/settings.html" style="font-size:12px;">Contact support or try again from Settings.</a>
+      </div>
+
+      <!-- Stats -->
+      <div class="card-grid">
+        <div class="card"><div class="card-title">Pending balance</div><div class="card-value" id="s-pending">—</div><div class="card-sub">AUDD in escrow</div></div>
+        <div class="card"><div class="card-title">Total payments</div><div class="card-value" id="s-count">—</div><div class="card-sub">Deposits received</div></div>
+        <div class="card"><div class="card-title">Total released</div><div class="card-value" id="s-released">—</div><div class="card-sub">Net AUDD paid out</div></div>
+        <div class="card"><div class="card-title">Next release</div><div class="card-value" id="s-next">—</div><div class="card-sub">6am UTC daily</div></div>
+      </div>
+
+      <!-- Quick actions -->
       <div class="card">
-        <div class="card-title-row">
-          <h2>Merchant balances</h2>
-          <button class="btn btn-secondary btn-sm" onclick="load()">Refresh</button>
+        <div class="card-title-row"><h2>Quick actions</h2></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <a href="/pages/merchant/paylink.html" class="btn btn-primary">⊕ Create payment link</a>
+          <a href="/pages/merchant/payments.html" class="btn btn-secondary">↑ View payments</a>
+          <button class="btn btn-secondary" onclick="releaseNow()" id="release-btn">▶ Release now</button>
         </div>
+        <div id="release-status" style="font-size:13px;color:var(--text-muted);margin-top:10px;display:none;"></div>
+      </div>
+
+      <!-- Recent sessions -->
+      <div class="card">
+        <div class="card-title-row"><h2>Recent payment sessions</h2><a href="/pages/merchant/payments.html" class="btn btn-secondary btn-sm">View all</a></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Merchant</th><th>Status</th><th>Pending (AUDD)</th><th>Payments</th><th>Last release</th></tr></thead>
-            <tbody id="m-tbody"><tr><td colspan="5" style="text-align:center;padding:28px;color:var(--text-hint);">Loading…</td></tr></tbody>
+            <thead><tr><th>Amount</th><th>Message</th><th>Status</th><th>Created</th><th>Link</th></tr></thead>
+            <tbody id="sess-tbody"><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -49,55 +75,99 @@
 <script src="/js/modules/nav.js"></script>
 <script>
   if (!auth.requireAuth()) throw 0;
-  const mode = auth.getMode();
-  initSidebar(mode);
-  document.getElementById('mode-badge').textContent = mode;
+  initSidebar();
 
-  function fmt(v) { return v!=null?(v/1e6).toFixed(2):'—'; }
+  function fmtA(v) { return v!=null?Number(v).toFixed(2)+' AUDD':'—'; }
   function nextRelease() {
-    const now=new Date(),next=new Date();
-    next.setUTCHours(6,0,0,0);
+    const now=new Date(),next=new Date(); next.setUTCHours(6,0,0,0);
     if(next<=now) next.setUTCDate(next.getUTCDate()+1);
     const d=next-now,h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000);
     return `${h}h ${m}m`;
   }
 
-  async function load() {
-    document.getElementById('s-release').textContent = nextRelease();
-    try {
-      const { merchants } = await api.merchants.list();
-      const active = merchants.filter(m=>m.is_active);
-      document.getElementById('s-merchants').textContent = active.length;
-
-      const escrows = await Promise.all(
-        active.slice(0,10).map(m=>api.escrow.get(m.merchant_id).catch(()=>({pendingBalance:0,totalPayments:0})))
-      );
-
-      const totalPending   = escrows.reduce((s,e)=>s+(e.pendingBalance||0),0);
-      const totalPayments  = escrows.reduce((s,e)=>s+(e.totalPayments||0),0);
-      document.getElementById('s-pending').textContent  = fmt(totalPending);
-      document.getElementById('s-payments').textContent = totalPayments;
-
-      const tbody = document.getElementById('m-tbody');
-      if (!active.length) {
-        tbody.innerHTML=`<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">◈</div><h3>No merchants yet</h3><p>Register in the <a href="/pages/developer/merchants.html">Merchants</a> page.</p></div></td></tr>`;
-        return;
-      }
-      tbody.innerHTML = active.map((m,i)=>{
-        const e=escrows[i]||{};
-        return `<tr>
-          <td style="font-family:var(--font-mono);font-size:12px;">${m.merchant_id}</td>
-          <td><span class="badge badge-success">Active</span></td>
-          <td style="font-weight:600;color:var(--teal);">${fmt(e.pendingBalance)}</td>
-          <td>${e.totalPayments??'—'}</td>
-          <td style="font-size:12px;color:var(--text-muted);">${e.lastReleasedAt?new Date(e.lastReleasedAt).toLocaleDateString():'Never'}</td>
-        </tr>`;
-      }).join('');
-    } catch(err) { toast.error(err.message); }
+  // Poll registration status until active or failed
+  let regPollTimer = null;
+  function startRegPoll() {
+    if (regPollTimer) return;
+    regPollTimer = setInterval(async () => {
+      try {
+        const { merchant } = await api.auth.status();
+        if (!merchant) return;
+        auth.updateMerchant(merchant);
+        if (merchant.registration_status === 'active') {
+          clearInterval(regPollTimer);
+          document.getElementById('reg-banner').style.display = 'none';
+          document.getElementById('reg-status-badge').innerHTML = '<span class="badge badge-success">Active</span>';
+          initSidebar(); // refresh sidebar badge
+          loadStats();
+          toast.success('Merchant registered on-chain!');
+        } else if (merchant.registration_status === 'failed') {
+          clearInterval(regPollTimer);
+          document.getElementById('reg-banner').style.display = 'none';
+          document.getElementById('reg-error-banner').style.display = '';
+          document.getElementById('reg-err-msg').textContent = merchant.registration_error || '';
+        }
+      } catch {}
+    }, 3000);
   }
 
-  load();
-  setInterval(()=>{ document.getElementById('s-release').textContent=nextRelease(); },60000);
+  async function loadStats() {
+    try {
+      document.getElementById('s-next').textContent = nextRelease();
+      const { merchant, chainEscrow } = await api.merchant.me();
+      if (!merchant) return;
+
+      const pending  = chainEscrow?.pendingBalance  ?? (merchant.escrows?.[0]?.pending_balance * 1e6) ?? 0;
+      const count    = chainEscrow?.totalPayments   ?? merchant.escrows?.[0]?.total_payments   ?? 0;
+
+      document.getElementById('s-pending').textContent  = fmtA(pending);
+      document.getElementById('s-count').textContent    = count;
+      document.getElementById('s-released').textContent = '—'; // loaded from release logs
+
+      // Load recent sessions
+      const { sessions } = await api.merchant.sessions();
+      const tbody = document.getElementById('sess-tbody');
+      if (!sessions.length) {
+        tbody.innerHTML=`<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">⊕</div><h3>No payments yet</h3><p><a href="/pages/merchant/paylink.html">Create your first payment link</a></p></div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = sessions.slice(0,5).map(s=>`<tr>
+        <td style="font-weight:600;">${s.amount!=null?Number(s.amount).toFixed(2)+' AUDD':'Open'}</td>
+        <td style="color:var(--text-muted);font-size:12px;">${s.message||'—'}</td>
+        <td><span class="badge ${s.status==='confirmed'?'badge-success':s.status==='pending'?'badge-pending':'badge-error'}">${s.status}</span></td>
+        <td style="font-size:12px;color:var(--text-muted);">${new Date(s.created_at).toLocaleString()}</td>
+        <td><a href="/pages/checkout.html?ref=${s.reference_key}" target="_blank" class="btn btn-secondary btn-sm">Share</a></td>
+      </tr>`).join('');
+    } catch(err) { console.error(err); }
+  }
+
+  async function releaseNow() {
+    const btn=document.getElementById('release-btn');
+    const st=document.getElementById('release-status');
+    btn.disabled=true; btn.textContent='⏳ Releasing…';
+    st.textContent='Sending release to Devnet…'; st.style.display='';
+    try {
+      const r=await api.merchant.releaseNow();
+      if(r.skipped) { st.textContent=`Skipped — ${r.reason}`; toast.info('No balance to release'); }
+      else { st.textContent=`Released ${Number(r.net/1e6).toFixed(4)} AUDD net`; toast.success('Released!'); loadStats(); }
+    } catch(err) { st.textContent='Error: '+err.message; toast.error(err.message); }
+    finally { btn.disabled=false; btn.textContent='▶ Release now'; }
+  }
+
+  // Check if merchant is still processing
+  const merchant = auth.getMerchant();
+  if (merchant?.registration_status === 'processing' || merchant?.registration_status === 'pending') {
+    document.getElementById('reg-banner').style.display = '';
+    startRegPoll();
+  } else if (merchant?.registration_status === 'failed') {
+    document.getElementById('reg-error-banner').style.display = '';
+    document.getElementById('reg-err-msg').textContent = merchant.registration_error || '';
+  } else if (merchant?.is_active) {
+    document.getElementById('reg-status-badge').innerHTML = '<span class="badge badge-success">Active</span>';
+  }
+
+  loadStats();
+  setInterval(()=>document.getElementById('s-next').textContent=nextRelease(), 60000);
 </script>
 </body>
 </html>

@@ -1,88 +1,59 @@
-const router          = require('express').Router();
-const { supabase }    = require('../config/supabase');
-const merchantService = require('../services/merchant');
-const contract        = require('../services/contract');
+const router     = require('express').Router();
+const { supabase } = require('../config/supabase');
+const { getProgram, getEscrowPDA } = require('../config/anchor');
 
-router.get('/', async (req, res, next) => {
+// ── GET /api/merchants/me — own merchant record ───────────
+router.get('/me', async (req, res, next) => {
   try {
-    const { data, error } = await supabase
-      .from('merchants')
-      .select('*, escrows(pending_balance, total_payments, last_released_at, vault_address)')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    res.json({ merchants: data });
-  } catch (err) { next(err); }
-});
+    const { data: merchant } = await supabase
+      .from('merchants').select('*, escrows(*)')
+      .eq('user_id', req.user.id).maybeSingle();
 
-router.get('/:id', async (req, res, next) => {
-  try {
-    const { data, error } = await supabase
-      .from('merchants').select('*, escrows(*)').eq('merchant_id', req.params.id).single();
-    if (error || !data) return res.status(404).json({ error: 'Merchant not found' });
-    const [onChain, escrowChain] = await Promise.all([
-      contract.fetchMerchantOnChain(req.params.id),
-      contract.fetchEscrowOnChain(req.params.id),
-    ]);
-    res.json({ merchant: data, onChain, escrowChain });
-  } catch (err) { next(err); }
-});
+    if (!merchant) return res.status(404).json({ error: 'No merchant found for this account' });
 
-router.post('/', async (req, res, next) => {
-  try {
-    const { merchant_id, wallet_address, name, email } = req.body;
-    if (!merchant_id || !wallet_address) {
-      return res.status(400).json({ error: 'merchant_id and wallet_address are required' });
+    // Try to fetch live chain data
+    let chainEscrow = null;
+    if (merchant.is_active && merchant.merchant_id) {
+      try {
+        const program     = getProgram();
+        const [escrowPDA] = getEscrowPDA(merchant.merchant_id);
+        const acc         = await program.account.escrowAccount.fetch(escrowPDA);
+        chainEscrow = {
+          pendingBalance: acc.pendingBalance.toNumber(),
+          totalPayments:  acc.totalPayments.toNumber(),
+          lastReleasedAt: acc.lastReleasedAt.toNumber(),
+        };
+        // Sync to DB
+        await supabase.from('escrows').update({
+          pending_balance: chainEscrow.pendingBalance / 1_000_000,
+          total_payments:  chainEscrow.totalPayments,
+        }).eq('merchant_id', merchant.merchant_id);
+      } catch { /* chain not reachable, use DB values */ }
     }
-    const result = await merchantService.createMerchant({
-      merchantId: merchant_id, walletAddress: wallet_address,
-      name, email, createdBy: req.user.id,
-    });
-    res.status(201).json(result);
+
+    res.json({ merchant, chainEscrow });
   } catch (err) { next(err); }
 });
 
-router.get('/:id/chain', async (req, res, next) => {
+// ── GET /api/merchants/me/sessions — own payment sessions ─
+router.get('/me/sessions', async (req, res, next) => {
   try {
-    const [merchant, escrow] = await Promise.all([
-      contract.fetchMerchantOnChain(req.params.id),
-      contract.fetchEscrowOnChain(req.params.id),
-    ]);
-    if (!merchant) return res.status(404).json({ error: 'Not found on-chain' });
-    res.json({ merchant, escrow });
+    const { data: merchant } = await supabase.from('merchants').select('merchant_id').eq('user_id', req.user.id).maybeSingle();
+    if (!merchant) return res.json({ sessions: [] });
+    const { data } = await supabase.from('payment_sessions').select('*')
+      .eq('merchant_id', merchant.merchant_id).order('created_at', { ascending: false }).limit(50);
+    res.json({ sessions: data || [] });
   } catch (err) { next(err); }
 });
 
-router.post('/:id/deactivate', async (req, res, next) => {
+// ── GET /api/merchants/me/releases — release history ──────
+router.get('/me/releases', async (req, res, next) => {
   try {
-    const tx = await contract.deactivateMerchant(req.params.id);
-    await supabase.from('merchants').update({ is_active: false }).eq('merchant_id', req.params.id);
-    res.json({ message: 'Deactivated', tx });
-  } catch (err) { next(err); }
-});
-
-router.post('/:id/wallet-update/request', async (req, res, next) => {
-  try {
-    const { new_wallet } = req.body;
-    if (!new_wallet) return res.status(400).json({ error: 'new_wallet required' });
-    const tx = await contract.requestWalletUpdate(req.params.id, new_wallet);
-    const unlockAt = new Date(Date.now() + 86_400_000).toISOString();
-    await supabase.from('wallet_update_requests').upsert({
-      merchant_id: req.params.id, new_wallet, tx_signature: tx,
-      unlocks_at: unlockAt, status: 'pending',
-    }, { onConflict: 'merchant_id' });
-    res.json({ message: 'Staged — confirm after 24h', tx, unlockAt });
-  } catch (err) { next(err); }
-});
-
-router.post('/:id/wallet-update/confirm', async (req, res, next) => {
-  try {
-    const tx = await contract.confirmWalletUpdate(req.params.id);
-    const chainState = await contract.fetchMerchantOnChain(req.params.id);
-    if (chainState) {
-      await supabase.from('merchants').update({ wallet_address: chainState.wallet }).eq('merchant_id', req.params.id);
-    }
-    await supabase.from('wallet_update_requests').update({ status: 'confirmed', confirmed_at: new Date().toISOString() }).eq('merchant_id', req.params.id);
-    res.json({ message: 'Wallet updated', tx });
+    const { data: merchant } = await supabase.from('merchants').select('merchant_id').eq('user_id', req.user.id).maybeSingle();
+    if (!merchant) return res.json({ logs: [] });
+    const { data } = await supabase.from('release_logs').select('*')
+      .eq('merchant_id', merchant.merchant_id).order('released_at', { ascending: false }).limit(50);
+    res.json({ logs: data || [] });
   } catch (err) { next(err); }
 });
 

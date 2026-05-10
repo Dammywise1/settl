@@ -1,139 +1,175 @@
 const { PublicKey, Keypair } = require('@solana/web3.js');
-const { encodeURL, findReference, validateTransfer, FindReferenceError } = require('@solana/pay');
-const BigNumber = require('bignumber.js');
+const BigNumber  = require('bignumber.js');
 const { supabase }    = require('../config/supabase');
-const { getConnection } = require('../config/anchor');
-const contract        = require('./contract');
+const { getConnection, getVaultPDA } = require('../config/anchor');
+
+// Lazy-load @solana/pay to avoid startup crash if not yet installed
+let solanaPay;
+function getSolanaPay() {
+  if (!solanaPay) solanaPay = require('@solana/pay');
+  return solanaPay;
+}
 
 // ── createPaymentSession ──────────────────────────────────
-// Creates a Solana Pay URL + stores session in DB.
-// recipient = merchant vault PDA (AUDD token account)
-// spl-token = AUDD mint
-async function createPaymentSession({ merchantId, amountAudd, label, message, memo }) {
-  // Get vault address from DB
-  const { data: escrow } = await supabase
-    .from('escrows').select('vault_address').eq('merchant_id', merchantId).single();
-  if (!escrow?.vault_address) throw new Error('Escrow vault not found for merchant');
+// The vault PDA = [b"vault", merchant_id] is a SPL token account
+// that holds AUDD on behalf of the escrow.
+//
+// Solana Pay transfer request:
+//   recipient  = vault PDA address (the token account)
+//   spl-token  = AUDD mint
+//   reference  = unique keypair pubkey for tracking
+//
+// This means: send AUDD to the vault directly.
+// The escrow program already controls that vault PDA.
+async function createPaymentSession({ merchantId, amountAudd, message, memo }) {
+  // Get vault_address from DB (set during signup registration)
+  const { data: merchant, error } = await supabase
+    .from('merchants')
+    .select('vault_address, wallet_address, name, is_active, registration_status')
+    .eq('merchant_id', merchantId)
+    .maybeSingle();
 
-  const { data: merchant } = await supabase
-    .from('merchants').select('wallet_address, name').eq('merchant_id', merchantId).single();
-  if (!merchant) throw new Error('Merchant not found');
+  if (!merchant)                           throw new Error('Merchant not found');
+  if (!merchant.is_active)                 throw new Error('Merchant is not active yet. Registration may still be processing.');
+  if (!merchant.vault_address)             throw new Error('Vault not initialised for this merchant. Try again in a moment.');
 
-  // Generate a unique reference keypair for this session
+  // vault_address is the SPL token account — use as recipient directly
+  const recipient = new PublicKey(merchant.vault_address);
+  const splToken  = new PublicKey(process.env.AUDD_MINT);
+
+  // Unique reference keypair for this session
   const referenceKeypair = Keypair.generate();
   const reference        = referenceKeypair.publicKey;
 
-  // recipient = the merchant's wallet (AUDD will go to their ATA)
-  const recipient  = new PublicKey(merchant.wallet_address);
-  const splToken   = contract.AUDD_MINT();
-  const amount     = amountAudd ? new BigNumber(amountAudd) : undefined;
+  const label    = merchant.name || merchantId;
+  const msgText  = message || `Payment to ${label}`;
+  const amount   = amountAudd ? new BigNumber(amountAudd) : undefined;
+
+  const { encodeURL } = getSolanaPay();
 
   const urlFields = {
     recipient,
     splToken,
-    reference: [reference],
-    label:   label   || merchant.name || merchantId,
-    message: message || `Payment to ${merchant.name || merchantId}`,
-    ...(memo   ? { memo } : {}),
+    reference:  [reference],
+    label,
+    message:    msgText,
+    ...(memo   ? { memo }   : {}),
     ...(amount ? { amount } : {}),
   };
 
-  const solanaPayUrl = encodeURL(urlFields);
+  const solanaUrl = encodeURL(urlFields).toString();
 
-  // Store session
-  await supabase.from('payment_sessions').insert({
+  // Persist session
+  const { data: session } = await supabase.from('payment_sessions').insert({
     merchant_id:   merchantId,
     amount:        amountAudd || null,
     reference_key: reference.toBase58(),
-    label:   urlFields.label,
-    message: urlFields.message,
-    memo:    memo || null,
-    status:  'pending',
-  });
+    label,
+    message:       msgText,
+    memo:          memo || null,
+    status:        'pending',
+  }).select().single();
 
   return {
-    url:          solanaPayUrl.toString(),
-    reference:    reference.toBase58(),
-    recipient:    recipient.toBase58(),
-    splToken:     splToken.toBase58(),
-    amount:       amountAudd || null,
-    label:        urlFields.label,
-    message:      urlFields.message,
+    session_id:    session.id,
+    url:           solanaUrl,
+    reference:     reference.toBase58(),
+    recipient:     merchant.vault_address,
+    spl_token:     process.env.AUDD_MINT,
+    amount:        amountAudd || null,
+    label,
+    message:       msgText,
+    merchant_name: merchant.name || merchantId,
+    // Shareable checkout link — works for anyone, no login
+    checkout_url:  `${process.env.APP_URL || 'http://localhost:3000'}/pages/checkout.html?ref=${reference.toBase58()}`,
   };
 }
 
 // ── pollPaymentSession ────────────────────────────────────
-// Called by frontend polling. Checks if the reference has been
-// seen on-chain, then validates the transfer.
+// Checks on-chain whether the reference has appeared.
+// Called by both the merchant dashboard AND the checkout page.
 async function pollPaymentSession(referenceKey) {
   const { data: session } = await supabase
     .from('payment_sessions')
-    .select('*, merchants(wallet_address, name)')
+    .select('*, merchants(wallet_address, name, vault_address)')
     .eq('reference_key', referenceKey)
-    .single();
+    .maybeSingle();
 
-  if (!session) throw new Error('Session not found');
-  if (session.status === 'confirmed') {
-    return { status: 'confirmed', tx: session.tx_signature };
-  }
-  if (session.status === 'expired') {
-    return { status: 'expired' };
+  if (!session) throw new Error('Payment session not found');
+  if (session.status === 'confirmed') return { status: 'confirmed', tx: session.tx_signature, session };
+  if (session.status === 'expired')   return { status: 'expired',   session };
+
+  // Check expiry
+  if (session.expires_at && new Date(session.expires_at) < new Date()) {
+    await supabase.from('payment_sessions').update({ status: 'expired' }).eq('reference_key', referenceKey);
+    return { status: 'expired', session };
   }
 
+  const { findReference, validateTransfer, FindReferenceError } = getSolanaPay();
   const connection  = getConnection();
   const reference   = new PublicKey(referenceKey);
-  const recipient   = new PublicKey(session.merchants.wallet_address);
-  const splToken    = contract.AUDD_MINT();
+  const recipient   = new PublicKey(session.merchants.vault_address);
+  const splToken    = new PublicKey(process.env.AUDD_MINT);
   const amount      = session.amount ? new BigNumber(session.amount) : undefined;
 
   try {
-    const signatureInfo = await findReference(connection, reference, { finality: 'confirmed' });
+    const sigInfo = await findReference(connection, reference, { finality: 'confirmed' });
 
-    // Validate that the transfer matches what we expected
+    // Validate the transfer matches what we asked for
     if (amount) {
-      await validateTransfer(connection, signatureInfo.signature, {
-        recipient, amount, splToken,
-      });
+      await validateTransfer(connection, sigInfo.signature, { recipient, amount, splToken });
     }
 
     const now = new Date().toISOString();
-
-    // Mark confirmed in DB
     await supabase.from('payment_sessions').update({
-      status: 'confirmed', tx_signature: signatureInfo.signature, confirmed_at: now,
+      status: 'confirmed', tx_signature: sigInfo.signature, confirmed_at: now,
     }).eq('reference_key', referenceKey);
 
-    // Record transaction
+    // Record deposit transaction
     await supabase.from('transactions').insert({
-      merchant_id:    session.merchant_id,
-      type:           'deposit',
-      amount:         session.amount || 0,
-      tx_signature:   signatureInfo.signature,
-      reference_key:  referenceKey,
-      status:         'confirmed',
+      merchant_id:   session.merchant_id,
+      type:          'deposit',
+      amount:        session.amount || 0,
+      tx_signature:  sigInfo.signature,
+      reference_key: referenceKey,
+      status:        'confirmed',
     });
 
-    // Sync escrow balance
-    const escrowChain = await contract.fetchEscrowOnChain(session.merchant_id).catch(() => null);
-    if (escrowChain) {
+    // Sync escrow balance from chain
+    try {
+      const { getProgram, getEscrowPDA } = require('../config/anchor');
+      const program     = getProgram();
+      const [escrowPDA] = getEscrowPDA(session.merchant_id);
+      const escrowAcc   = await program.account.escrowAccount.fetch(escrowPDA);
       await supabase.from('escrows').update({
-        pending_balance: escrowChain.pendingBalance / 1_000_000,
-        total_payments:  escrowChain.totalPayments,
+        pending_balance: escrowAcc.pendingBalance.toNumber() / 1_000_000,
+        total_payments:  escrowAcc.totalPayments.toNumber(),
       }).eq('merchant_id', session.merchant_id);
+    } catch (e) {
+      console.warn('[poll] Escrow sync failed:', e.message);
     }
 
-    return { status: 'confirmed', tx: signatureInfo.signature };
+    return { status: 'confirmed', tx: sigInfo.signature, session };
 
   } catch (err) {
-    if (err instanceof FindReferenceError) {
-      // Not found yet — still pending
-      return { status: 'pending' };
+    if (err.name === 'FindReferenceError' || err.message?.includes('not found')) {
+      return { status: 'pending', session };
     }
-    // Validation failed
-    console.error('[solanaPay] validateTransfer failed:', err.message);
+    console.error('[poll] validateTransfer failed:', err.message);
     await supabase.from('payment_sessions').update({ status: 'failed' }).eq('reference_key', referenceKey);
-    return { status: 'failed', error: err.message };
+    return { status: 'failed', error: err.message, session };
   }
 }
 
-module.exports = { createPaymentSession, pollPaymentSession };
+// ── getSessionByRef ───────────────────────────────────────
+// Used by the public checkout page to load session info
+async function getSessionByRef(referenceKey) {
+  const { data: session } = await supabase
+    .from('payment_sessions')
+    .select('*, merchants(name, wallet_address, vault_address)')
+    .eq('reference_key', referenceKey)
+    .maybeSingle();
+  return session;
+}
+
+module.exports = { createPaymentSession, pollPaymentSession, getSessionByRef };

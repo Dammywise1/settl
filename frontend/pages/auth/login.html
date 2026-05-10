@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>SETTL — Sign in</title>
   <link rel="stylesheet" href="/css/app.css"/>
 </head>
@@ -10,14 +9,14 @@
 <div class="auth-wrap">
   <div class="auth-card">
     <div class="auth-logo">SETTL</div>
-    <div class="auth-sub">Payment gateway · Sign in</div>
+    <div class="auth-sub">Solana payment gateway</div>
 
-    <div class="mode-switch" style="margin-bottom:22px;">
-      <button class="mode-btn active" id="tab-login"  onclick="tab('login')">Sign in</button>
-      <button class="mode-btn"        id="tab-signup" onclick="tab('signup')">Create account</button>
+    <div class="mode-switch" style="margin-bottom:24px;width:100%;">
+      <button class="mode-btn active" id="tab-login"  onclick="showTab('login')">Sign in</button>
+      <button class="mode-btn"        id="tab-signup" onclick="showTab('signup')">Create account</button>
     </div>
 
-    <!-- Login -->
+    <!-- ── Sign in ── -->
     <div id="v-login">
       <div class="form-group">
         <label class="form-label">Email</label>
@@ -25,29 +24,40 @@
       </div>
       <div class="form-group">
         <label class="form-label">Password</label>
-        <input class="form-input" id="l-pass"  type="password" placeholder="Your password" autocomplete="current-password"/>
+        <input class="form-input" id="l-pass" type="password" placeholder="Your password" autocomplete="current-password"/>
       </div>
       <div id="l-err" class="alert alert-error" style="display:none;"></div>
       <button class="btn btn-primary btn-full" id="l-btn" onclick="doLogin()">Sign in</button>
     </div>
 
-    <!-- Signup -->
+    <!-- ── Create account (= merchant registration) ── -->
     <div id="v-signup" style="display:none;">
+      <div class="alert alert-info" style="margin-bottom:18px;">
+        Creating an account automatically registers you as a merchant on Solana Devnet.
+      </div>
       <div class="form-group">
         <label class="form-label">Full name</label>
-        <input class="form-input" id="s-name"  type="text"     placeholder="Your name"/>
+        <input class="form-input" id="s-name" type="text" placeholder="Your name"/>
       </div>
       <div class="form-group">
         <label class="form-label">Email</label>
-        <input class="form-input" id="s-email" type="email"    placeholder="you@example.com" autocomplete="email"/>
+        <input class="form-input" id="s-email" type="email" placeholder="you@example.com" autocomplete="email"/>
       </div>
       <div class="form-group">
         <label class="form-label">Password <span style="color:var(--text-hint);font-weight:400;">(min 8 chars)</span></label>
-        <input class="form-input" id="s-pass"  type="password" placeholder="Create a password" autocomplete="new-password"/>
+        <input class="form-input" id="s-pass" type="password" placeholder="Create a strong password" autocomplete="new-password"/>
       </div>
-      <div id="s-err" class="alert alert-error"   style="display:none;"></div>
+      <div class="form-group">
+        <label class="form-label">Solana wallet address <span style="color:var(--coral)">*</span></label>
+        <input class="form-input" id="s-wallet" type="text" placeholder="Your Solana public key (base58)"
+               autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="font-family:var(--font-mono);font-size:13px;"/>
+        <div class="form-hint">AUDD payments will be released to this wallet daily at 6am UTC. You can use a Phantom or Backpack wallet address.</div>
+      </div>
+      <div id="s-err" class="alert alert-error" style="display:none;"></div>
       <div id="s-ok"  class="alert alert-success" style="display:none;"></div>
-      <button class="btn btn-primary btn-full" id="s-btn" onclick="doSignup()">Create account</button>
+      <button class="btn btn-primary btn-full" id="s-btn" onclick="doSignup()">
+        Create account &amp; register merchant
+      </button>
     </div>
   </div>
 </div>
@@ -57,8 +67,8 @@
 <script>
   if (auth.isLoggedIn()) window.location.href = '/pages/dashboard.html';
 
-  function tab(t) {
-    const isL = t === 'login';
+  function showTab(t) {
+    const isL = t==='login';
     document.getElementById('v-login').style.display  = isL ? '' : 'none';
     document.getElementById('v-signup').style.display = isL ? 'none' : '';
     document.getElementById('tab-login').classList.toggle('active',  isL);
@@ -66,54 +76,63 @@
   }
 
   function setErr(id, msg) {
-    const el = document.getElementById(id);
-    el.textContent = msg; el.style.display = msg ? '' : 'none';
+    const el=document.getElementById(id);
+    el.textContent=msg; el.style.display=msg?'':'none';
   }
 
   async function doLogin() {
-    const email = document.getElementById('l-email').value.trim();
-    const pass  = document.getElementById('l-pass').value;
-    setErr('l-err', '');
-    if (!email || !pass) { setErr('l-err', 'Email and password required'); return; }
-    const btn = document.getElementById('l-btn');
-    btn.disabled = true; btn.textContent = 'Signing in…';
+    const email=document.getElementById('l-email').value.trim();
+    const pass =document.getElementById('l-pass').value;
+    setErr('l-err','');
+    if (!email||!pass) { setErr('l-err','Email and password required'); return; }
+    const btn=document.getElementById('l-btn');
+    btn.disabled=true; btn.textContent='Signing in…';
     try {
-      const { token, user } = await api.auth.login(email, pass);
-      auth.save(token, user);
+      const { token, user, merchant } = await api.auth.login(email, pass);
+      auth.save(token, user, merchant);
       window.location.href = '/pages/dashboard.html';
-    } catch (err) {
+    } catch(err) {
       setErr('l-err', err.message);
-      btn.disabled = false; btn.textContent = 'Sign in';
+      btn.disabled=false; btn.textContent='Sign in';
     }
   }
 
   async function doSignup() {
-    const name  = document.getElementById('s-name').value.trim();
-    const email = document.getElementById('s-email').value.trim();
-    const pass  = document.getElementById('s-pass').value;
-    setErr('s-err', '');
-    document.getElementById('s-ok').style.display = 'none';
-    if (!email || !pass) { setErr('s-err', 'Email and password required'); return; }
-    if (pass.length < 8) { setErr('s-err', 'Password must be at least 8 characters'); return; }
+    const name   = document.getElementById('s-name').value.trim();
+    const email  = document.getElementById('s-email').value.trim();
+    const pass   = document.getElementById('s-pass').value;
+    const wallet = document.getElementById('s-wallet').value.trim();
+    setErr('s-err','');
+    document.getElementById('s-ok').style.display='none';
+
+    if (!email||!pass)   { setErr('s-err','Email and password required'); return; }
+    if (pass.length < 8) { setErr('s-err','Password must be at least 8 characters'); return; }
+    if (!wallet)         { setErr('s-err','Wallet address is required'); return; }
+    // Basic length check — backend validates with PublicKey
+    if (wallet.length < 32 || wallet.length > 44) {
+      setErr('s-err','Wallet address must be a valid Solana base58 public key (32–44 characters)'); return;
+    }
+
     const btn = document.getElementById('s-btn');
-    btn.disabled = true; btn.textContent = 'Creating…';
+    btn.disabled=true; btn.textContent='Creating account…';
+
     try {
-      await api.auth.signup(email, pass, name);
-      document.getElementById('s-ok').textContent = 'Account created! Signing you in…';
-      document.getElementById('s-ok').style.display = '';
-      const { token, user } = await api.auth.login(email, pass);
-      auth.save(token, user);
-      window.location.href = '/pages/dashboard.html';
-    } catch (err) {
+      const { token, user, merchant } = await api.auth.signup({ email, password: pass, full_name: name, wallet_address: wallet });
+      auth.save(token, user, merchant);
+
+      document.getElementById('s-ok').textContent = '✓ Account created! Registering your merchant on-chain in the background…';
+      document.getElementById('s-ok').style.display='';
+
+      setTimeout(() => { window.location.href = '/pages/dashboard.html'; }, 1200);
+    } catch(err) {
       setErr('s-err', err.message);
-      btn.disabled = false; btn.textContent = 'Create account';
+      btn.disabled=false; btn.textContent='Create account & register merchant';
     }
   }
 
   document.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
-    if (document.getElementById('v-login').style.display !== 'none') doLogin();
-    else doSignup();
+    if (document.getElementById('v-login').style.display !== 'none') doLogin(); else doSignup();
   });
 </script>
 </body>

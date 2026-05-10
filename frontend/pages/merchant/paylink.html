@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL — Create payment</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left"><button class="menu-btn" onclick="openSidebar()">☰</button><span class="topbar-title">Create payment</span></div>
+      <span class="badge badge-success">merchant</span>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Form card -->
+      <div class="card" style="max-width:520px;">
+        <div class="card-title-row"><h2>New payment request</h2></div>
+        <p style="color:var(--text-muted);font-size:14px;margin-bottom:18px;line-height:1.6;">
+          Generate a QR code and shareable link. Customers pay AUDD directly into your escrow vault using any Solana wallet.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">Amount (AUDD) <span style="color:var(--text-hint);font-weight:400;">— leave blank for open amount</span></label>
+          <input class="form-input" id="inp-amount" type="number" min="0.01" step="0.01" placeholder="e.g. 25.00" style="font-size:20px;font-weight:600;"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Order reference / message <span style="color:var(--text-hint);font-weight:400;">— optional</span></label>
+          <input class="form-input" id="inp-msg" placeholder="e.g. Order #1234, Invoice INV-001"/>
+        </div>
+        <div id="form-err" class="alert alert-error" style="display:none;"></div>
+        <button class="btn btn-primary btn-full" id="gen-btn" onclick="generate()" style="font-size:16px;padding:14px;">
+          Generate payment link
+        </button>
+      </div>
+
+      <!-- Result card (hidden until generated) -->
+      <div class="card" id="result-card" style="display:none;max-width:520px;">
+
+        <!-- Steps -->
+        <div class="steps">
+          <div class="step active" id="st1">1</div>
+          <div class="step-line" id="sl1"></div>
+          <div class="step waiting" id="st2">2</div>
+          <div class="step-line" id="sl2"></div>
+          <div class="step waiting" id="st3">✓</div>
+        </div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;" id="step-label">Waiting for customer to pay…</p>
+
+        <!-- QR code -->
+        <div class="qr-wrap" style="margin-bottom:16px;">
+          <div id="qr-canvas"></div>
+          <div style="text-align:center;">
+            <div style="font-size:15px;font-weight:600;" id="qr-merchant"></div>
+            <div style="font-size:26px;font-weight:700;color:var(--brand);margin:6px 0;" id="qr-amount"></div>
+            <div style="font-size:12px;color:var(--text-muted);">AUDD · Solana Devnet · Powered by SETTL</div>
+          </div>
+        </div>
+
+        <!-- Polling indicator -->
+        <div id="polling-row" style="display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:14px;margin-bottom:14px;">
+          <div class="spinner"></div><span>Watching for payment on-chain…</span>
+        </div>
+
+        <!-- Confirmed -->
+        <div id="confirmed-row" style="display:none;" class="alert alert-success">
+          ✓ Payment confirmed on-chain!
+          <a id="conf-tx" href="#" target="_blank" style="display:block;font-size:12px;font-family:var(--font-mono);margin-top:4px;word-break:break-all;"></a>
+        </div>
+
+        <!-- Share section -->
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px;">
+          <div class="form-label" style="margin-bottom:8px;">Share this payment link</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+            <input class="form-input" id="share-url" readonly style="flex:1;font-size:12px;font-family:var(--font-mono);"/>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="copyLink()">📋 Copy link</button>
+            <button class="btn btn-secondary btn-sm" onclick="shareLink()">↑ Share</button>
+            <a id="whatsapp-btn" href="#" target="_blank" class="btn btn-secondary btn-sm" style="background:#25D366;color:#fff;border:none;">WhatsApp</a>
+            <button class="btn btn-secondary btn-sm" onclick="newPayment()">+ New payment</button>
+          </div>
+          <div class="form-hint" style="margin-top:8px;">
+            This link opens a checkout page. Anyone with the link can scan the QR and pay — no SETTL account needed.
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  initSidebar();
+
+  const merchant = auth.getMerchant();
+  if (merchant && !merchant.is_active) {
+    document.getElementById('form-err').textContent = 'Your merchant is still being registered on-chain. Please wait a moment and refresh.';
+    document.getElementById('form-err').style.display = '';
+    document.getElementById('gen-btn').disabled = true;
+  }
+
+  let pollTimer = null;
+  let currentCheckoutUrl = null;
+  let currentRef = null;
+
+  async function generate() {
+    const amountVal = document.getElementById('inp-amount').value;
+    const message   = document.getElementById('inp-msg').value.trim();
+    document.getElementById('form-err').style.display = 'none';
+
+    const m = auth.getMerchant();
+    if (!m?.is_active) {
+      document.getElementById('form-err').textContent = 'Merchant not yet active — registration may still be processing.';
+      document.getElementById('form-err').style.display = '';
+      return;
+    }
+
+    const amount = amountVal ? parseFloat(amountVal) : null;
+    if (amount !== null && (isNaN(amount) || amount <= 0)) {
+      document.getElementById('form-err').textContent = 'Enter a valid amount greater than 0.';
+      document.getElementById('form-err').style.display = '';
+      return;
+    }
+
+    const btn = document.getElementById('gen-btn');
+    btn.disabled = true; btn.textContent = 'Generating…';
+
+    try {
+      const session = await api.payments.session({
+        merchant_id: m.merchant_id,
+        amount:      amount,
+        message:     message || null,
+      });
+
+      currentRef         = session.reference;
+      currentCheckoutUrl = session.checkout_url;
+
+      // Render QR from Solana Pay URL
+      document.getElementById('qr-canvas').innerHTML = '';
+      new QRCode(document.getElementById('qr-canvas'), {
+        text:         session.url,
+        width:        220, height: 220,
+        colorDark:    '#111827', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M,
+      });
+
+      document.getElementById('qr-merchant').textContent = session.merchant_name || m.merchant_id;
+      document.getElementById('qr-amount').textContent   = amount ? amount.toFixed(2) + ' AUDD' : 'Open amount';
+
+      // Share URL = checkout page link
+      const shareUrl = session.checkout_url;
+      document.getElementById('share-url').value = shareUrl;
+
+      // WhatsApp share
+      const waMsg = encodeURIComponent(`Pay ${amount ? amount + ' AUDD' : ''} to ${session.merchant_name || m.merchant_id}: ${shareUrl}`);
+      document.getElementById('whatsapp-btn').href = `https://wa.me/?text=${waMsg}`;
+
+      document.getElementById('result-card').style.display = '';
+      document.getElementById('confirmed-row').style.display = 'none';
+      document.getElementById('polling-row').style.display  = 'flex';
+      setStep(1);
+      startPolling(currentRef);
+      document.getElementById('result-card').scrollIntoView({ behavior: 'smooth' });
+
+    } catch(err) {
+      document.getElementById('form-err').textContent = err.message;
+      document.getElementById('form-err').style.display = '';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Generate payment link';
+    }
+  }
+
+  function startPolling(ref) {
+    stopPolling();
+    setStep(2);
+    document.getElementById('step-label').textContent = 'Scanning for payment on Solana Devnet…';
+    pollTimer = setInterval(async () => {
+      try {
+        const r = await api.payments.pollPublic(ref);
+        if (r.status === 'confirmed') {
+          stopPolling();
+          setStep(3);
+          document.getElementById('step-label').textContent   = 'Payment received!';
+          document.getElementById('polling-row').style.display  = 'none';
+          document.getElementById('confirmed-row').style.display = '';
+          const txLink = document.getElementById('conf-tx');
+          txLink.href        = `https://explorer.solana.com/tx/${r.tx}?cluster=devnet`;
+          txLink.textContent = r.tx;
+          toast.success('💰 Payment confirmed!');
+        } else if (r.status === 'expired') {
+          stopPolling();
+          document.getElementById('step-label').textContent = 'Session expired. Generate a new payment.';
+          document.getElementById('polling-row').style.display = 'none';
+        }
+      } catch {}
+    }, 1500);
+  }
+
+  function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+  function setStep(n) {
+    [1,2,3].forEach(i => {
+      document.getElementById(`st${i}`).className = `step ${i<n?'done':i===n?'active':'waiting'}`;
+      const l = document.getElementById(`sl${i}`);
+      if (l) l.className = `step-line${i<n?' done':''}`;
+    });
+  }
+
+  function copyLink() {
+    const val = document.getElementById('share-url').value;
+    navigator.clipboard.writeText(val).then(()=>toast.success('Link copied!'));
+  }
+
+  function shareLink() {
+    const val = document.getElementById('share-url').value;
+    if (navigator.share) {
+      navigator.share({ title: 'SETTL Payment', text: 'Pay via SETTL', url: val }).catch(()=>{});
+    } else {
+      copyLink();
+    }
+  }
+
+  function newPayment() {
+    stopPolling();
+    document.getElementById('result-card').style.display = 'none';
+    document.getElementById('inp-amount').value = '';
+    document.getElementById('inp-msg').value    = '';
+    currentRef = null;
+  }
+</script>
+</body>
+</html>

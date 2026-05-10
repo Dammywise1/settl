@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL — Payments</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left"><button class="menu-btn" onclick="openSidebar()">☰</button><span class="topbar-title">Payments</span></div>
+    </div>
+    <div class="page-body">
+      <div class="card-grid">
+        <div class="card"><div class="card-title">Total gross</div><div class="card-value" id="s-gross">—</div><div class="card-sub">AUDD collected</div></div>
+        <div class="card"><div class="card-title">Net received</div><div class="card-value" id="s-net">—</div><div class="card-sub">After 1.5% fee</div></div>
+        <div class="card"><div class="card-title">Fees paid</div><div class="card-value" id="s-fee">—</div><div class="card-sub">To SETTL</div></div>
+        <div class="card"><div class="card-title">Next release</div><div class="card-value" id="s-next">—</div><div class="card-sub">6am UTC</div></div>
+      </div>
+
+      <!-- Payment sessions -->
+      <div class="card">
+        <div class="card-title-row"><h2>Payment sessions</h2><a href="/pages/merchant/paylink.html" class="btn btn-primary btn-sm">+ New</a></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Amount</th><th>Message</th><th>Status</th><th>Created</th><th>Checkout link</th></tr></thead>
+            <tbody id="sess-tbody"><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Release history -->
+      <div class="card">
+        <div class="card-title-row"><h2>Release history</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Gross</th><th>Fee (1.5%)</th><th>Net</th><th>Status</th><th>Explorer</th></tr></thead>
+            <tbody id="rel-tbody"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  initSidebar();
+  const EX='https://explorer.solana.com/tx/', CL='?cluster=devnet';
+  const fmtA = v => v!=null?Number(v).toFixed(4)+' AUDD':'—';
+  function nextRelease() {
+    const now=new Date(),next=new Date(); next.setUTCHours(6,0,0,0);
+    if(next<=now) next.setUTCDate(next.getUTCDate()+1);
+    const d=next-now,h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000);
+    return `${h}h ${m}m`;
+  }
+  function shortKey(k) { return k?k.slice(0,6)+'…'+k.slice(-4):'—'; }
+
+  async function load() {
+    document.getElementById('s-next').textContent = nextRelease();
+    try {
+      const [{ sessions }, { logs }] = await Promise.all([api.merchant.sessions(), api.merchant.releases()]);
+
+      // Stats from release logs
+      const totalGross = logs.reduce((s,r)=>s+Number(r.gross||0),0);
+      const totalNet   = logs.reduce((s,r)=>s+Number(r.net  ||0),0);
+      const totalFee   = logs.reduce((s,r)=>s+Number(r.fee  ||0),0);
+      document.getElementById('s-gross').textContent = totalGross.toFixed(4)+' AUDD';
+      document.getElementById('s-net').textContent   = totalNet.toFixed(4)+' AUDD';
+      document.getElementById('s-fee').textContent   = totalFee.toFixed(4)+' AUDD';
+
+      // Sessions table
+      const sb = document.getElementById('sess-tbody');
+      sb.innerHTML = sessions.length ? sessions.map(s=>`<tr>
+        <td style="font-weight:600;">${s.amount!=null?Number(s.amount).toFixed(2)+' AUDD':'Open'}</td>
+        <td style="color:var(--text-muted);font-size:12px;">${s.message||'—'}</td>
+        <td><span class="badge ${s.status==='confirmed'?'badge-success':s.status==='pending'?'badge-pending':'badge-error'}">${s.status}</span></td>
+        <td style="font-size:12px;color:var(--text-muted);">${new Date(s.created_at).toLocaleString()}</td>
+        <td>
+          <div style="display:flex;gap:6px;">
+            <a href="/pages/checkout.html?ref=${s.reference_key}" target="_blank" class="btn btn-secondary btn-sm">Open</a>
+            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${location.origin}/pages/checkout.html?ref=${s.reference_key}').then(()=>toast.success('Copied!'))">Copy</button>
+          </div>
+        </td>
+      </tr>`).join('')
+      : `<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--text-hint);">No payment sessions yet — <a href="/pages/merchant/paylink.html">create one</a></td></tr>`;
+
+      // Releases table
+      const rb = document.getElementById('rel-tbody');
+      rb.innerHTML = logs.length ? logs.map(r=>`<tr>
+        <td style="font-size:12px;">${new Date(r.released_at).toLocaleString()}</td>
+        <td>${fmtA(r.gross)}</td>
+        <td style="color:var(--text-muted);">${fmtA(r.fee)}</td>
+        <td style="font-weight:600;color:var(--teal);">${fmtA(r.net)}</td>
+        <td><span class="badge ${r.status==='success'?'badge-success':'badge-error'}">${r.status}</span></td>
+        <td>${r.tx_signature?`<a href="${EX}${r.tx_signature}${CL}" target="_blank" style="font-family:var(--font-mono);font-size:11px;">${shortKey(r.tx_signature)}</a>`:'—'}</td>
+      </tr>`).join('')
+      : `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-hint);">No releases yet — first at 6am UTC</td></tr>`;
+
+    } catch(err) { toast.error(err.message); }
+  }
+
+  load();
+  setInterval(()=>document.getElementById('s-next').textContent=nextRelease(),60000);
+</script>
+</body>
+</html>

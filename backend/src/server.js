@@ -18,29 +18,30 @@ app.use(express.json());
 app.use(morgan('dev'));
 
 // Static frontend
-const frontendPath = path.join(__dirname, '../../frontend');
-app.use(express.static(frontendPath));
+app.use(express.static(path.join(__dirname, '../../frontend')));
 
 // Rate limit
-app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 150 }));
+app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
 
-// Public routes (no auth)
-app.use('/api/health',   require('./routes/health'));
-app.use('/api/auth',     require('./routes/auth'));
+// ── Public routes (no auth) ───────────────────────────────
+app.use('/api/auth',    require('./routes/auth'));
+app.use('/api/health',  require('./routes/health'));
 
-// Payments poll is public (customer-facing, no login)
-app.use('/api/payments/poll', require('./routes/payments'));
+// Public payment polling + checkout session loading
+const paymentsRouter = require('./routes/payments');
+app.get('/api/payments/poll/:ref',    paymentsRouter);
+app.get('/api/payments/session/:ref', paymentsRouter);
 
-// Protected routes
+// ── Protected routes ──────────────────────────────────────
 app.use('/api/merchants', authMiddleware, require('./routes/merchants'));
-app.use('/api/escrow',    authMiddleware, require('./routes/escrow'));
-app.use('/api/payments',  authMiddleware, require('./routes/payments'));
+app.use('/api/payments',  authMiddleware, paymentsRouter);
 app.use('/api/release',   authMiddleware, require('./routes/release'));
 
-// Catch-all → frontend
-app.get('*', (req, res) => res.sendFile(path.join(frontendPath, 'index.html')));
+// Catch-all → frontend SPA
+app.get('*', (req, res) =>
+  res.sendFile(path.join(__dirname, '../../frontend', 'index.html'))
+);
 
-// Error handler
 app.use((err, req, res, next) => {
   console.error('[ERROR]', err.message);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
@@ -48,8 +49,6 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`\n[SETTL] ▶  http://localhost:${PORT}`);
-  console.log(`[SETTL] Program: ${process.env.SETTL_PROGRAM_ID}`);
   startCron();
 });
-
 module.exports = app;

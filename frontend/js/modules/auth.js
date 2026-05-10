@@ -1,22 +1,20 @@
-const KEY_TOKEN   = 'settl_token';
-const KEY_USER    = 'settl_user';
-const KEY_MODE    = 'settl_mode';
-
 const auth = {
-  getToken()   { return localStorage.getItem(KEY_TOKEN); },
-  getUser()    { try { return JSON.parse(localStorage.getItem(KEY_USER)); } catch { return null; } },
-  getMode()    { return localStorage.getItem(KEY_MODE) || 'operator'; },
-  setMode(m)   { localStorage.setItem(KEY_MODE, m); },
+  getToken()  { return localStorage.getItem('settl_token'); },
+  getUser()   { try { return JSON.parse(localStorage.getItem('settl_user')); } catch { return null; } },
+  getMerchant(){ try { return JSON.parse(localStorage.getItem('settl_merchant')); } catch { return null; } },
 
-  save(token, user) {
-    localStorage.setItem(KEY_TOKEN, token);
-    localStorage.setItem(KEY_USER, JSON.stringify(user));
+  save(token, user, merchant) {
+    localStorage.setItem('settl_token',    token);
+    localStorage.setItem('settl_user',     JSON.stringify(user));
+    if (merchant) localStorage.setItem('settl_merchant', JSON.stringify(merchant));
+  },
+
+  updateMerchant(merchant) {
+    localStorage.setItem('settl_merchant', JSON.stringify(merchant));
   },
 
   clear() {
-    localStorage.removeItem(KEY_TOKEN);
-    localStorage.removeItem(KEY_USER);
-    localStorage.removeItem(KEY_MODE);
+    ['settl_token','settl_user','settl_merchant'].forEach(k => localStorage.removeItem(k));
   },
 
   isLoggedIn() { return !!this.getToken(); },
@@ -25,8 +23,5 @@ const auth = {
     if (!this.isLoggedIn()) { window.location.href = '/pages/auth/login.html'; return false; }
     return true;
   },
-
-  getRole() { return this.getUser()?.role || 'operator'; },
 };
-
 window.auth = auth;

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>SETTL — Balance</title><link rel="stylesheet" href="/css/app.css"/></head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+    <div class="topbar"><div class="topbar-left"><button class="menu-btn" onclick="openSidebar()">☰</button><span class="topbar-title">Balance</span></div></div>
+    <div class="page-body">
+      <div class="card-grid">
+        <div class="card"><div class="card-title">Pending</div><div class="card-value" id="s-pending">—</div><div class="card-sub">AUDD in escrow vault</div></div>
+        <div class="card"><div class="card-title">Payments</div><div class="card-value" id="s-count">—</div><div class="card-sub">Total received</div></div>
+        <div class="card"><div class="card-title">Last release</div><div class="card-value" id="s-last">—</div><div class="card-sub">UTC time</div></div>
+        <div class="card"><div class="card-title">Next release</div><div class="card-value" id="s-next">—</div><div class="card-sub">6am UTC daily</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title-row"><h2>Wallet &amp; vault details</h2><button class="btn btn-secondary btn-sm" onclick="load()">Refresh</button></div>
+        <div class="info-grid" id="details" style="margin-bottom:16px;"><span class="info-label">Loading…</span><span></span></div>
+        <button class="btn btn-primary" id="release-btn" onclick="releaseNow()">▶ Release now</button>
+        <div id="release-status" style="font-size:13px;color:var(--text-muted);margin-top:10px;display:none;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/js/modules/api.js"></script><script src="/js/modules/auth.js"></script><script src="/js/modules/toast.js"></script><script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  initSidebar();
+  function fmtA(v){return v!=null?(v/1e6).toFixed(4)+' AUDD':'—';}
+  function shortKey(k){return k?k.slice(0,8)+'…'+k.slice(-6):'—';}
+  function nextRelease(){
+    const now=new Date(),next=new Date();next.setUTCHours(6,0,0,0);
+    if(next<=now)next.setUTCDate(next.getUTCDate()+1);
+    const d=next-now,h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000);
+    return `${h}h ${m}m`;
+  }
+  async function load(){
+    document.getElementById('s-next').textContent=nextRelease();
+    try {
+      const { merchant, chainEscrow } = await api.merchant.me();
+      const pending  = chainEscrow?.pendingBalance ?? 0;
+      const count    = chainEscrow?.totalPayments  ?? 0;
+      const lastRel  = chainEscrow?.lastReleasedAt ? new Date(chainEscrow.lastReleasedAt*1000).toLocaleString() : 'Never';
+      document.getElementById('s-pending').textContent = fmtA(pending);
+      document.getElementById('s-count').textContent   = count;
+      document.getElementById('s-last').textContent    = lastRel;
+      document.getElementById('details').innerHTML = `
+        <span class="info-label">Merchant ID</span><span class="info-value n">${merchant.merchant_id}</span>
+        <span class="info-label">Wallet</span>
+        <span class="info-value" onclick="navigator.clipboard.writeText('${merchant.wallet_address}').then(()=>toast.success('Copied!'))" style="cursor:pointer;" title="Tap to copy">${shortKey(merchant.wallet_address)}</span>
+        <span class="info-label">Vault PDA</span>
+        <span class="info-value" onclick="navigator.clipboard.writeText('${merchant.vault_address||''}').then(()=>toast.success('Copied!'))" style="cursor:pointer;">${shortKey(merchant.vault_address)}</span>
+        <span class="info-label">Status</span><span><span class="badge ${merchant.is_active?'badge-success':'badge-pending'}">${merchant.registration_status}</span></span>
+      `;
+    } catch(err){ toast.error(err.message); }
+  }
+  async function releaseNow(){
+    const btn=document.getElementById('release-btn');
+    const st=document.getElementById('release-status');
+    btn.disabled=true;btn.textContent='⏳ Releasing…';
+    st.textContent='Sending to Devnet…';st.style.display='';
+    try {
+      const r=await api.merchant.releaseNow();
+      if(r.skipped){st.textContent=`Skipped — ${r.reason}`;toast.info('Nothing to release');}
+      else{st.textContent=`Released ${Number(r.net/1e6).toFixed(4)} AUDD net`;toast.success('Released!');load();}
+    } catch(err){st.textContent='Error: '+err.message;toast.error(err.message);}
+    finally{btn.disabled=false;btn.textContent='▶ Release now';}
+  }
+  load();
+  setInterval(()=>document.getElementById('s-next').textContent=nextRelease(),60000);
+</script>
+</body></html>
