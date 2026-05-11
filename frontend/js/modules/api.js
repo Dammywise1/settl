@@ -48,7 +48,8 @@ const api = {
   merchant: {
     me:         () => api.get('/merchants/me'),
     sessions:   () => api.get('/merchants/me/sessions'),
-    releases:   () => api.get('/merchants/me/releases'),
+    releases:     () => api.get('/merchants/me/releases'),
+    transactions: (p) => api.get('/merchants/me/transactions?' + new URLSearchParams(p||{})),
     releaseNow: () => api.post('/release/me', {}),
   },
 

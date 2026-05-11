@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL — Developer docs</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    .docs-wrap   { max-width: 800px; margin: 0 auto; padding: 24px 16px 64px; }
+    .docs-nav    { position: sticky; top: 52px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; gap: 8px; flex-wrap: wrap; z-index: 20; margin: -16px -16px 24px; }
+    @media(min-width:768px){ .docs-nav { margin: -24px -28px 32px; padding: 12px 28px; } }
+    .docs-nav a  { font-size: 13px; font-weight: 500; color: var(--text-muted); padding: 4px 10px; border-radius: 14px; text-decoration: none; transition: background .15s, color .15s; }
+    .docs-nav a:hover, .docs-nav a.active { background: var(--brand-light); color: var(--brand-dark); }
+    .docs-section { margin-bottom: 48px; }
+    .docs-section h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; padding-top: 8px; }
+    .docs-section h3 { font-size: 16px; font-weight: 600; margin: 24px 0 8px; color: var(--text-primary); }
+    .docs-section p  { font-size: 14px; color: var(--text-muted); line-height: 1.7; margin-bottom: 12px; }
+    .docs-section ul { padding-left: 20px; margin-bottom: 12px; }
+    .docs-section li { font-size: 14px; color: var(--text-muted); line-height: 1.8; }
+    .docs-section li strong { color: var(--text-primary); }
+    .code-block  { background: #1E1E2E; color: #CDD6F4; border-radius: var(--radius-md); padding: 16px; font-family: var(--font-mono); font-size: 12px; line-height: 1.7; overflow-x: auto; margin: 12px 0; position: relative; }
+    .code-block .copy-btn { position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,.1); border: none; color: #CDD6F4; border-radius: 4px; padding: 3px 10px; font-size: 11px; cursor: pointer; }
+    .code-block .copy-btn:hover { background: rgba(255,255,255,.2); }
+    .code-kw   { color: #CBA6F7; }
+    .code-str  { color: #A6E3A1; }
+    .code-cmt  { color: #6C7086; font-style: italic; }
+    .code-num  { color: #FAB387; }
+    .endpoint  { display: inline-flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; font-family: var(--font-mono); font-size: 13px; margin: 8px 0; }
+    .method    { font-weight: 700; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+    .method-post   { background: #4CAF50; color: #fff; }
+    .method-get    { background: #2196F3; color: #fff; }
+    .badge-pill { display: inline-block; background: var(--brand-light); color: var(--brand-dark); border-radius: 12px; padding: 2px 10px; font-size: 12px; font-weight: 600; margin: 2px; }
+    .field-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    .field-table th { background: var(--bg); padding: 8px 12px; text-align: left; border: 1px solid var(--border); font-weight: 600; font-size: 12px; color: var(--text-muted); }
+    .field-table td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    .field-table td:first-child { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+    .field-table td:nth-child(2) { color: var(--brand); font-size: 11px; }
+    .divider   { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+    .callout   { border-left: 3px solid var(--brand); background: var(--brand-light); padding: 12px 16px; border-radius: 0 var(--radius-md) var(--radius-md) 0; margin: 16px 0; font-size: 13px; color: var(--brand-dark); line-height: 1.6; }
+    .callout.warning { border-color: var(--amber); background: var(--amber-light); color: #78350F; }
+  </style>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Developer docs</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="docs-wrap">
+
+        <!-- Nav -->
+        <div class="docs-nav">
+          <a href="#overview"  onclick="setActive(this)">Overview</a>
+          <a href="#checkout"  onclick="setActive(this)">Checkout</a>
+          <a href="#apikeys"   onclick="setActive(this)">API keys</a>
+          <a href="#webhooks"  onclick="setActive(this)">Webhooks</a>
+          <a href="#events"    onclick="setActive(this)">Events</a>
+          <a href="#verify"    onclick="setActive(this)">Verify signatures</a>
+        </div>
+
+        <!-- ═══ OVERVIEW ════════════════════════════════ -->
+        <div class="docs-section" id="overview">
+          <h2>Overview</h2>
+          <p>
+            SETTL is a Solana-based AUDD payment gateway. Merchants receive payments into
+            an escrow vault PDA and funds are released daily at 6am UTC, net of a 1.5% fee.
+          </p>
+          <p>
+            You can integrate SETTL into your own platform in two ways:
+          </p>
+          <ul>
+            <li><strong>Redirect / link</strong> — Create a payment session via API, send the
+              <code>checkout_url</code> to your customer. They pay on the SETTL checkout page.</li>
+            <li><strong>Webhook + poll</strong> — After creating a session, poll
+              <code>/api/pay/status/:ref</code> or listen for the <code>deposit.confirmed</code>
+              webhook to confirm payment server-side before fulfilling the order.</li>
+          </ul>
+
+          <h3>Base URL</h3>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            https://your-settl-domain.com
+          </div>
+
+          <h3>Authentication</h3>
+          <p>All programmatic endpoints use an API key in the request header:</p>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            x-api-key: sk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          </div>
+          <p>Generate API keys from the <a href="/pages/merchant/apikeys.html">API keys page</a>.</p>
+        </div>
+
+        <hr class="divider"/>
+
+        <!-- ═══ CHECKOUT ════════════════════════════════ -->
+        <div class="docs-section" id="checkout">
+          <h2>Checkout integration</h2>
+          <p>
+            The SETTL checkout page works for any payment session, regardless of how it was
+            created — directly from the SETTL dashboard, or programmatically via API key.
+            Your customers see the same branded experience either way.
+          </p>
+
+          <h3>Step 1 — Create a payment session</h3>
+          <div class="endpoint">
+            <span class="method method-post">POST</span>
+            /api/pay/charge
+          </div>
+          <p>Call this from your server (not the browser) using your API key.</p>
+
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="code-cmt"># Create a payment session</span>
+curl -X POST https://your-settl-domain.com/api/pay/charge \
+  -H <span class="code-str">"x-api-key: sk_live_..."</span> \
+  -H <span class="code-str">"Content-Type: application/json"</span> \
+  -d <span class="code-str">'{"amount": 25.00, "message": "Order #1234"}'</span>
+          </div>
+
+          <h3>Request body</h3>
+          <table class="field-table">
+            <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+            <tr><td>amount</td><td>number</td><td>Amount in AUDD (e.g. 25.00). Leave out for open amount.</td></tr>
+            <tr><td>message</td><td>string</td><td>Order reference shown on checkout page. Optional.</td></tr>
+            <tr><td>memo</td><td>string</td><td>On-chain memo included in the Solana transaction. Optional.</td></tr>
+          </table>
+
+          <h3>Response</h3>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+{
+  <span class="code-str">"session_id"</span>:    <span class="code-str">"uuid"</span>,
+  <span class="code-str">"reference"</span>:     <span class="code-str">"base58-public-key"</span>,   <span class="code-cmt">// unique per payment</span>
+  <span class="code-str">"checkout_url"</span>:  <span class="code-str">"https://your-settl.com/pages/checkout.html?ref=..."</span>,
+  <span class="code-str">"url"</span>:           <span class="code-str">"solana:vault?spl-token=...&amp;reference=...&amp;amount=25"</span>,
+  <span class="code-str">"amount"</span>:        <span class="code-num">25.00</span>,
+  <span class="code-str">"merchant_name"</span>: <span class="code-str">"Your Store"</span>
+}
+          </div>
+
+          <h3>Step 2 — Redirect customer to checkout</h3>
+          <p>
+            Send the customer to <code>checkout_url</code>. They can scan the QR with
+            Phantom, Backpack, or any Solana wallet — or use the manual vault address.
+          </p>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="code-cmt">// Node.js / Express example</span>
+<span class="code-kw">const</span> session = <span class="code-kw">await</span> createSettlSession({ amount: <span class="code-num">25.00</span>, message: orderId });
+res.redirect(session.checkout_url);
+          </div>
+
+          <div class="callout">
+            The checkout page is universal — it works for SETTL merchants, API integrations,
+            and embedded iframes. The page auto-detects the session from the <code>?ref=</code>
+            query parameter and polls until payment is confirmed.
+          </div>
+
+          <h3>Step 3 — Confirm payment server-side</h3>
+          <p>
+            Never rely on the client redirecting back to confirm payment. Always verify
+            server-side using one of:
+          </p>
+          <ul>
+            <li><strong>Poll</strong> — GET <code>/api/pay/status/:reference</code> until
+              <code>{"status":"confirmed"}</code></li>
+            <li><strong>Webhook</strong> — Listen for the <code>deposit.confirmed</code> event
+              (recommended for production)</li>
+          </ul>
+
+          <div class="endpoint">
+            <span class="method method-get">GET</span>
+            /api/pay/status/:reference
+          </div>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="code-cmt"># Poll payment status (no auth needed)</span>
+curl https://your-settl.com/api/pay/status/4ioangUTMFq...
+
+<span class="code-cmt"># Response</span>
+{ <span class="code-str">"status"</span>: <span class="code-str">"confirmed"</span>, <span class="code-str">"tx"</span>: <span class="code-str">"3pP6cANT..."</span> }
+<span class="code-cmt"># or</span>
+{ <span class="code-str">"status"</span>: <span class="code-str">"pending"</span> }
+          </div>
+        </div>
+
+        <hr class="divider"/>
+
+        <!-- ═══ API KEYS ══════════════════════════════════ -->
+        <div class="docs-section" id="apikeys">
+          <h2>API keys</h2>
+          <p>
+            API keys allow your server to create payment sessions without a SETTL account
+            session. Generate them from <a href="/pages/merchant/apikeys.html">API keys</a>.
+          </p>
+
+          <div class="callout warning">
+            API keys are secret — treat them like passwords. Never include them in frontend
+            JavaScript or mobile apps. Always call SETTL from your server backend.
+          </div>
+
+          <h3>Full Node.js integration example</h3>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="code-cmt">// server.js — your own backend</span>
+<span class="code-kw">const</span> SETTL_API_KEY = process.env.SETTL_API_KEY; <span class="code-cmt">// sk_live_...</span>
+<span class="code-kw">const</span> SETTL_BASE    = <span class="code-str">'https://your-settl-domain.com'</span>;
+
+<span class="code-kw">async function</span> createPayment(orderId, amount) {
+  <span class="code-kw">const</span> res = <span class="code-kw">await</span> fetch(<span class="code-str">`${SETTL_BASE}/api/pay/charge`</span>, {
+    method:  <span class="code-str">'POST'</span>,
+    headers: {
+      <span class="code-str">'x-api-key'</span>:      SETTL_API_KEY,
+      <span class="code-str">'Content-Type'</span>:   <span class="code-str">'application/json'</span>,
+    },
+    body: JSON.stringify({
+      amount,
+      message: <span class="code-str">`Order ${orderId}`</span>,
+    }),
+  });
+
+  <span class="code-kw">const</span> session = <span class="code-kw">await</span> res.json();
+  <span class="code-cmt">// Redirect customer to checkout</span>
+  <span class="code-kw">return</span> session.checkout_url;
+}
+
+<span class="code-cmt">// Later — verify payment before fulfilling order</span>
+<span class="code-kw">async function</span> checkPayment(reference) {
+  <span class="code-kw">const</span> res  = <span class="code-kw">await</span> fetch(<span class="code-str">`${SETTL_BASE}/api/pay/status/${reference}`</span>);
+  <span class="code-kw">const</span> data = <span class="code-kw">await</span> res.json();
+  <span class="code-kw">return</span> data.status === <span class="code-str">'confirmed'</span>;
+}
+          </div>
+
+          <h3>Python example</h3>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="code-kw">import</span> requests
+
+SETTL_API_KEY = <span class="code-str">"sk_live_..."</span>
+SETTL_BASE    = <span class="code-str">"https://your-settl-domain.com"</span>
+
+<span class="code-kw">def</span> create_payment(order_id, amount):
+    res = requests.post(
+        <span class="code-str">f"{SETTL_BASE}/api/pay/charge"</span>,
+        headers={<span class="code-str">"x-api-key"</span>: SETTL_API_KEY},
+        json={<span class="code-str">"amount"</span>: amount, <span class="code-str">"message"</span>: <span class="code-str">f"Order {order_id}"</span>}
+    )
+    session = res.json()
+    <span class="code-kw">return</span> session[<span class="code-str">"checkout_url"</span>]
+          </div>
+        </div>
+
+        <hr class="divider"/>
+
+        <!-- ═══ WEBHOOKS ═════════════════════════════════ -->
+        <div class="docs-section" id="webhooks">
+          <h2>Webhooks</h2>
+          <p>
+            SETTL sends an HTTP POST to your endpoint when payment events occur.
+            Configure endpoints from the <a href="/pages/merchant/webhooks.html">Webhooks page</a>.
+          </p>
+
+          <h3>Request format</h3>
+          <p>Every webhook request includes these headers:</p>
+          <table class="field-table">
+            <tr><th>Header</th><th>Value</th><th>Description</th></tr>
+            <tr><td>Content-Type</td><td>application/json</td><td>Always JSON</td></tr>
+            <tr><td>X-SETTL-Signature</td><td>sha256=&lt;hmac&gt;</td><td>HMAC-SHA256 of the raw body</td></tr>
+            <tr><td>X-SETTL-Event</td><td>deposit.confirmed</td><td>The event type</td></tr>
+            <tr><td>X-SETTL-Delivery</td><td>uuid</td><td>Unique delivery ID</td></tr>
+            <tr><td>User-Agent</td><td>SETTL-Webhooks/1.0</td><td>Identifier</td></tr>
+          </table>
+
+          <h3>Retry policy</h3>
+          <p>
+            If your endpoint returns a non-2xx response, SETTL retries up to 3 times
+            with exponential backoff: <strong>1s → 3s → 9s</strong>.
+          </p>
+
+          <div class="callout">
+            Respond with HTTP 200 as fast as possible. Process the event asynchronously
+            if needed — don't do slow work inside the webhook handler.
+          </div>
+        </div>
+
+        <hr class="divider"/>
+
+        <!-- ═══ EVENTS ══════════════════════════════════ -->
+        <div class="docs-section" id="events">
+          <h2>Event reference</h2>
+
+          <h3><span class="badge-pill">deposit.confirmed</span></h3>
+          <p>Fired when a customer's payment is confirmed on Solana.</p>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+{
+  <span class="code-str">"event"</span>:       <span class="code-str">"deposit.confirmed"</span>,
+  <span class="code-str">"merchant_id"</span>: <span class="code-str">"your-merchant-id"</span>,
+  <span class="code-str">"timestamp"</span>:   <span class="code-str">"2025-05-10T17:38:14.000Z"</span>,
+  <span class="code-str">"data"</span>: {
+    <span class="code-str">"reference_key"</span>: <span class="code-str">"4ioangUTMFqPWeY4S9aTYWx..."</span>,
+    <span class="code-str">"amount"</span>:        <span class="code-num">25.00</span>,
+    <span class="code-str">"tx_signature"</span>: <span class="code-str">"3pP6cANTJX5hDu3XRydh..."</span>,
+    <span class="code-str">"confirmed_at"</span>: <span class="code-str">"2025-05-10T17:38:14.000Z"</span>
+  }
+}
+          </div>
+
+          <h3><span class="badge-pill">release.completed</span></h3>
+          <p>Fired when the daily 6am release sends funds to your wallet.</p>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+{
+  <span class="code-str">"event"</span>:       <span class="code-str">"release.completed"</span>,
+  <span class="code-str">"merchant_id"</span>: <span class="code-str">"your-merchant-id"</span>,
+  <span class="code-str">"timestamp"</span>:   <span class="code-str">"2025-05-11T06:00:03.000Z"</span>,
+  <span class="code-str">"data"</span>: {
+    <span class="code-str">"gross"</span>:        <span class="code-num">25.00</span>,
+    <span class="code-str">"fee"</span>:          <span class="code-num">0.375</span>,
+    <span class="code-str">"net"</span>:          <span class="code-num">24.625</span>,
+    <span class="code-str">"tx_signature"</span>: <span class="code-str">"5mK9pBNT..."</span>,
+    <span class="code-str">"released_at"</span>:  <span class="code-str">"2025-05-11T06:00:03.000Z"</span>
+  }
+}
+          </div>
+        </div>
+
+        <hr class="divider"/>
+
+        <!-- ═══ VERIFY SIGNATURES ══════════════════════ -->
+        <div class="docs-section" id="verify">
+          <h2>Verifying webhook signatures</h2>
+          <p>
+            Always verify the <code>X-SETTL-Signature</code> header before processing a
+            webhook. Use the signing secret shown when you created the endpoint.
+          </p>
+
+          <h3>Node.js</h3>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="code-kw">const</span> crypto = <span class="code-kw">require</span>(<span class="code-str">'crypto'</span>);
+
+<span class="code-kw">function</span> verifySettlWebhook(rawBody, signatureHeader, secret) {
+  <span class="code-kw">const</span> expected = <span class="code-str">'sha256='</span> + crypto
+    .createHmac(<span class="code-str">'sha256'</span>, secret)
+    .update(rawBody)          <span class="code-cmt">// rawBody must be the raw Buffer/string</span>
+    .digest(<span class="code-str">'hex'</span>);
+
+  <span class="code-kw">return</span> crypto.timingSafeEqual(
+    Buffer.from(signatureHeader),
+    Buffer.from(expected)
+  );
+}
+
+<span class="code-cmt">// Express example</span>
+app.post(<span class="code-str">'/webhooks/settl'</span>, express.raw({ type: <span class="code-str">'application/json'</span> }), (req, res) => {
+  <span class="code-kw">const</span> sig    = req.headers[<span class="code-str">'x-settl-signature'</span>];
+  <span class="code-kw">const</span> secret = process.env.SETTL_WEBHOOK_SECRET;
+
+  <span class="code-kw">if</span> (!verifySettlWebhook(req.body, sig, secret)) {
+    <span class="code-kw">return</span> res.status(<span class="code-num">401</span>).send(<span class="code-str">'Invalid signature'</span>);
+  }
+
+  <span class="code-kw">const</span> event = JSON.parse(req.body);
+
+  <span class="code-kw">if</span> (event.event === <span class="code-str">'deposit.confirmed'</span>) {
+    <span class="code-cmt">// Fulfil order using event.data.reference_key</span>
+    fulfillOrder(event.data.reference_key, event.data.amount);
+  }
+
+  res.status(<span class="code-num">200</span>).send(<span class="code-str">'OK'</span>);
+});
+          </div>
+
+          <h3>Python</h3>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="code-kw">import</span> hmac, hashlib, json
+<span class="code-kw">from</span> flask <span class="code-kw">import</span> Flask, request, abort
+
+app    = Flask(__name__)
+SECRET = <span class="code-str">"your-webhook-signing-secret"</span>
+
+<span class="code-kw">def</span> verify(payload_bytes, signature):
+    expected = <span class="code-str">"sha256="</span> + hmac.new(
+        SECRET.encode(), payload_bytes, hashlib.sha256
+    ).hexdigest()
+    <span class="code-kw">return</span> hmac.compare_digest(signature, expected)
+
+@app.route(<span class="code-str">'/webhooks/settl'</span>, methods=[<span class="code-str">'POST'</span>])
+<span class="code-kw">def</span> webhook():
+    sig = request.headers.get(<span class="code-str">'X-SETTL-Signature'</span>, <span class="code-str">''</span>)
+    <span class="code-kw">if not</span> verify(request.data, sig):
+        abort(<span class="code-num">401</span>)
+    event = request.get_json()
+    <span class="code-kw">if</span> event[<span class="code-str">'event'</span>] == <span class="code-str">'deposit.confirmed'</span>:
+        fulfill_order(event[<span class="code-str">'data'</span>][<span class="code-str">'reference_key'</span>])
+    <span class="code-kw">return</span> <span class="code-str">''</span>, <span class="code-num">200</span>
+          </div>
+
+          <h3>PHP</h3>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="code-str">&lt;?php</span>
+$secret  = getenv(<span class="code-str">'SETTL_WEBHOOK_SECRET'</span>);
+$payload = file_get_contents(<span class="code-str">'php://input'</span>);
+$sig     = $_SERVER[<span class="code-str">'HTTP_X_SETTL_SIGNATURE'</span>] ?? <span class="code-str">''</span>;
+$expected = <span class="code-str">'sha256='</span> . hash_hmac(<span class="code-str">'sha256'</span>, $payload, $secret);
+
+<span class="code-kw">if</span> (!hash_equals($expected, $sig)) {
+    http_response_code(<span class="code-num">401</span>);
+    exit;
+}
+
+$event = json_decode($payload, true);
+
+<span class="code-kw">if</span> ($event[<span class="code-str">'event'</span>] === <span class="code-str">'deposit.confirmed'</span>) {
+    fulfill_order($event[<span class="code-str">'data'</span>][<span class="code-str">'reference_key'</span>]);
+}
+http_response_code(<span class="code-num">200</span>);
+          </div>
+
+          <div class="callout warning">
+            Always use the raw request body (before JSON parsing) for signature verification.
+            JSON serialisation can reorder keys and break the HMAC.
+          </div>
+        </div>
+
+      </div><!-- /docs-wrap -->
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  initSidebar();
+
+  function setActive(el) {
+    document.querySelectorAll('.docs-nav a').forEach(a => a.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  function copyCode(btn) {
+    const block = btn.closest('.code-block');
+    const text  = block.innerText.replace('Copy\n', '').replace(/\u00A0/g, ' ').trim();
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  }
+
+  // Highlight active nav item on scroll
+  const sections = document.querySelectorAll('.docs-section');
+  const navLinks  = document.querySelectorAll('.docs-nav a');
+
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => {
+          a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id);
+        });
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+
+  sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>

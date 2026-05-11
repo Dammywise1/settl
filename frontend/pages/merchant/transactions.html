@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL — Transactions</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Transaction history</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Summary cards -->
+      <div class="card-grid" id="summary-cards">
+        <div class="card">
+          <div class="card-title">Total deposited</div>
+          <div class="card-value" id="s-deposited">—</div>
+          <div class="card-sub">Gross AUDD received</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Total released</div>
+          <div class="card-value" id="s-released">—</div>
+          <div class="card-sub">Net AUDD to wallet</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Total fees</div>
+          <div class="card-value" id="s-fees">—</div>
+          <div class="card-sub">1.5% per release</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Count</div>
+          <div class="card-value" id="s-count">—</div>
+          <div class="card-sub">Total transactions</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <div>
+            <label class="form-label" style="margin-bottom:4px;">Type</label>
+            <select class="form-input" id="f-type" style="width:auto;" onchange="load(true)">
+              <option value="">All types</option>
+              <option value="deposit">Deposits</option>
+              <option value="release">Releases</option>
+              <option value="fee">Fees</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label" style="margin-bottom:4px;">Status</label>
+            <select class="form-input" id="f-status" style="width:auto;" onchange="load(true)">
+              <option value="">All statuses</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary" onclick="load(true)">Filter</button>
+          <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card">
+        <div class="card-title-row">
+          <h2>Transactions</h2>
+          <span id="page-info" style="font-size:13px;color:var(--text-muted);"></span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Fee</th>
+                <th>Net</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Tx</th>
+              </tr>
+            </thead>
+            <tbody id="tx-tbody">
+              <tr>
+                <td colspan="7" style="text-align:center;padding:32px;color:var(--text-hint);">
+                  Loading…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;flex-wrap:wrap;gap:8px;">
+          <span id="showing-info" style="font-size:13px;color:var(--text-muted);"></span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm" id="btn-prev"
+                    onclick="changePage(-1)" disabled>← Previous</button>
+            <button class="btn btn-secondary btn-sm" id="btn-next"
+                    onclick="changePage(1)"  disabled>Next →</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  initSidebar();
+
+  const EX  = 'https://explorer.solana.com/tx/';
+  const CL  = '?cluster=devnet';
+  const PER = 25;
+
+  let offset = 0;
+  let total  = 0;
+  let allTxs = []; // for CSV
+
+  function fmtA(v) { return v != null ? Number(v).toFixed(4) + ' AUDD' : '—'; }
+  function shortKey(k) { return k ? k.slice(0, 6) + '…' + k.slice(-4) : '—'; }
+
+  const TYPE_COLORS = {
+    deposit: 'badge-success',
+    release: 'badge-info',
+    fee:     'badge-pending',
+  };
+
+  async function load(reset = false) {
+    if (reset) offset = 0;
+
+    const type   = document.getElementById('f-type').value;
+    const status = document.getElementById('f-status').value;
+    const tbody  = document.getElementById('tx-tbody');
+
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-hint);">
+      <div class="spinner" style="margin:0 auto;"></div>
+    </td></tr>`;
+
+    try {
+      const params = { limit: PER, offset };
+      if (type)   params.type   = type;
+      if (status) params.status = status;
+
+      const { transactions, total: t } = await api.merchant.transactions(params);
+      total = t;
+
+      // Update summary on first load / reset
+      if (reset || offset === 0) updateSummary(type, status);
+
+      if (!transactions.length) {
+        tbody.innerHTML = `<tr><td colspan="7">
+          <div class="empty-state">
+            <div class="empty-icon">≡</div>
+            <h3>No transactions found</h3>
+            <p>Try adjusting the filters above.</p>
+          </div>
+        </td></tr>`;
+        updatePagination(0);
+        return;
+      }
+
+      tbody.innerHTML = transactions.map(tx => `
+        <tr>
+          <td>
+            <span class="badge ${TYPE_COLORS[tx.type] || 'badge-info'}">
+              ${tx.type}
+            </span>
+          </td>
+          <td style="font-weight:600;">${fmtA(tx.amount)}</td>
+          <td style="color:var(--text-muted);">${tx.fee ? fmtA(tx.fee) : '—'}</td>
+          <td style="color:var(--teal);font-weight:${tx.net ? '600' : '400'};">
+            ${tx.net ? fmtA(tx.net) : '—'}
+          </td>
+          <td>
+            <span class="badge ${
+              tx.status === 'confirmed' ? 'badge-success' :
+              tx.status === 'failed'    ? 'badge-error'   : 'badge-pending'
+            }">${tx.status}</span>
+          </td>
+          <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">
+            ${new Date(tx.created_at).toLocaleString()}
+          </td>
+          <td>
+            ${tx.tx_signature
+              ? `<a href="${EX}${tx.tx_signature}${CL}" target="_blank"
+                    style="font-family:var(--font-mono);font-size:11px;color:var(--brand);">
+                    ${shortKey(tx.tx_signature)}
+                 </a>`
+              : '—'}
+          </td>
+        </tr>`).join('');
+
+      updatePagination(transactions.length);
+
+    } catch (err) {
+      toast.error('Failed to load: ' + err.message);
+    }
+  }
+
+  async function updateSummary(type, status) {
+    try {
+      // Load all for summary (no pagination)
+      const { transactions: all } = await api.merchant.transactions({ limit: 100, offset: 0 });
+      allTxs = all; // save for CSV
+
+      const deposits  = all.filter(t => t.type === 'deposit'  && t.status === 'confirmed');
+      const releases  = all.filter(t => t.type === 'release'  && t.status === 'confirmed');
+      const fees      = all.filter(t => t.type === 'fee'      && t.status === 'confirmed');
+
+      const totalDep  = deposits.reduce((s, t) => s + Number(t.amount || 0), 0);
+      const totalRel  = releases.reduce((s, t) => s + Number(t.net    || 0), 0);
+      const totalFee  = fees.reduce(    (s, t) => s + Number(t.amount || 0), 0);
+
+      document.getElementById('s-deposited').textContent = totalDep.toFixed(4) + ' AUDD';
+      document.getElementById('s-released').textContent  = totalRel.toFixed(4) + ' AUDD';
+      document.getElementById('s-fees').textContent      = totalFee.toFixed(4) + ' AUDD';
+      document.getElementById('s-count').textContent     = all.length;
+    } catch {}
+  }
+
+  function updatePagination(count) {
+    const start = offset + 1;
+    const end   = Math.min(offset + count, total);
+    document.getElementById('showing-info').textContent =
+      total ? `Showing ${start}–${end} of ${total}` : '';
+    document.getElementById('page-info').textContent =
+      total ? `${total} total` : '';
+    document.getElementById('btn-prev').disabled = offset === 0;
+    document.getElementById('btn-next').disabled = offset + PER >= total;
+  }
+
+  function changePage(dir) {
+    offset = Math.max(0, offset + dir * PER);
+    load();
+  }
+
+  function resetFilters() {
+    document.getElementById('f-type').value   = '';
+    document.getElementById('f-status').value = '';
+    load(true);
+  }
+
+  async function exportCSV() {
+    try {
+      // Export all (up to 1000)
+      const { transactions } = await api.merchant.transactions({ limit: 1000, offset: 0 });
+
+      const rows = [
+        ['ID', 'Type', 'Amount (AUDD)', 'Fee (AUDD)', 'Net (AUDD)',
+         'Status', 'Date', 'Tx Signature', 'Customer Wallet'],
+        ...transactions.map(t => [
+          t.id,
+          t.type,
+          t.amount != null ? Number(t.amount).toFixed(6) : '',
+          t.fee    != null ? Number(t.fee).toFixed(6)    : '',
+          t.net    != null ? Number(t.net).toFixed(6)    : '',
+          t.status,
+          new Date(t.created_at).toISOString(),
+          t.tx_signature   || '',
+          t.customer_wallet || '',
+        ]),
+      ];
+
+      const csv  = rows.map(r =>
+        r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')
+      ).join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `settl-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('CSV exported!');
+    } catch (err) {
+      toast.error('Export failed: ' + err.message);
+    }
+  }
+
+  load(true);
+</script>
+</body>
+</html>

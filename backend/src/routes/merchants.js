@@ -107,3 +107,63 @@ router.get('/me/releases', async (req, res, next) => {
 });
 
 module.exports = router;
+
+// ── GET /api/merchants/me/transactions ────────────────────
+router.get('/me/transactions', async (req, res, next) => {
+  try {
+    const { data: merchant } = await supabase
+      .from('merchants').select('merchant_id').eq('user_id', req.user.id).maybeSingle();
+    if (!merchant) return res.json({ transactions: [], total: 0 });
+
+    const limit  = Math.min(parseInt(req.query.limit  || '50'), 100);
+    const offset = parseInt(req.query.offset || '0');
+    const type   = req.query.type;   // 'deposit' | 'release' | 'fee'
+    const status = req.query.status; // 'confirmed' | 'pending' | 'failed'
+
+    let query = supabase
+      .from('transactions')
+      .select('*', { count: 'exact' })
+      .eq('merchant_id', merchant.merchant_id)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (type)   query = query.eq('type',   type);
+    if (status) query = query.eq('status', status);
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+
+    res.set('Cache-Control', 'no-store');
+    res.json({ transactions: data || [], total: count || 0, limit, offset });
+  } catch (err) { next(err); }
+});
+
+// ── GET /api/merchants/me/transactions ────────────────────
+router.get('/me/transactions', async (req, res, next) => {
+  try {
+    const { data: merchant } = await supabase
+      .from('merchants').select('merchant_id').eq('user_id', req.user.id).maybeSingle();
+    if (!merchant) return res.json({ transactions: [], total: 0 });
+
+    const limit  = Math.min(parseInt(req.query.limit  || '50'), 100);
+    const offset = parseInt(req.query.offset || '0');
+    const type   = req.query.type;   // 'deposit' | 'release' | 'fee'
+    const status = req.query.status; // 'confirmed' | 'pending' | 'failed'
+
+    let query = supabase
+      .from('transactions')
+      .select('*', { count: 'exact' })
+      .eq('merchant_id', merchant.merchant_id)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (type)   query = query.eq('type',   type);
+    if (status) query = query.eq('status', status);
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+
+    res.set('Cache-Control', 'no-store');
+    res.json({ transactions: data || [], total: count || 0, limit, offset });
+  } catch (err) { next(err); }
+});
