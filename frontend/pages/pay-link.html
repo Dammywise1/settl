@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL — Pay</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body { background: #EEEDF8; }
+    .pay-top  { text-align:center; padding: 20px 16px 0; }
+    .pay-logo { font-size:20px; font-weight:700; color:var(--brand); }
+    .pay-sub  { font-size:12px; color:var(--text-muted); margin-top:2px; }
+  </style>
+</head>
+<body>
+<div class="pay-top">
+  <div class="pay-logo">SETTL</div>
+  <div class="pay-sub">Solana payment</div>
+</div>
+<div class="checkout-wrap" style="padding-top:12px;">
+  <div class="checkout-card" id="checkout-card">
+    <div style="text-align:center;padding:40px 0;">
+      <div class="spinner" style="width:28px;height:28px;margin:0 auto 14px;"></div>
+      <div style="color:var(--text-muted);">Loading payment…</div>
+    </div>
+  </div>
+</div>
+<script src="/js/modules/api.js"></script>
+<script>
+  // Get slug from URL: /pay/<slug>
+  const slug = window.location.pathname.split('/pay/')[1]?.split('?')[0];
+
+  async function init() {
+    if (!slug) {
+      document.getElementById('checkout-card').innerHTML =
+        '<div class="alert alert-error">Invalid payment link.</div>';
+      return;
+    }
+    try {
+      // Create a fresh session from this reusable link
+      const session = await api.payments.linkInfo(slug);
+      // Redirect to the universal checkout page with the new session reference
+      window.location.href = `/pages/checkout.html?ref=${session.reference}`;
+    } catch(err) {
+      document.getElementById('checkout-card').innerHTML =
+        `<div class="alert alert-error">${err.message || 'Invalid or inactive payment link.'}</div>
+         <p style="font-size:13px;color:var(--text-muted);margin-top:8px;">Ask the merchant for a new link.</p>`;
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>

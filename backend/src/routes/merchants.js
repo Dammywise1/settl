@@ -167,3 +167,23 @@ router.get('/me/transactions', async (req, res, next) => {
     res.json({ transactions: data || [], total: count || 0, limit, offset });
   } catch (err) { next(err); }
 });
+
+// ── PATCH /api/merchants/me/branding ─────────────────────
+router.patch('/me/branding', async (req, res, next) => {
+  try {
+    const { brand_name, brand_logo_url, success_url, support_email } = req.body;
+    const { data: merchant } = await supabase
+      .from('merchants').select('merchant_id').eq('user_id', req.user.id).maybeSingle();
+    if (!merchant) return res.status(404).json({ error: 'No merchant found' });
+
+    const updates = {};
+    if (brand_name     !== undefined) updates.brand_name     = brand_name;
+    if (brand_logo_url !== undefined) updates.brand_logo_url = brand_logo_url;
+    if (success_url    !== undefined) updates.success_url    = success_url;
+    if (support_email  !== undefined) updates.support_email  = support_email;
+
+    const { data } = await supabase.from('merchants')
+      .update(updates).eq('merchant_id', merchant.merchant_id).select().single();
+    res.json({ merchant: data });
+  } catch (err) { next(err); }
+});

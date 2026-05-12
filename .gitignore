@@ -1,4 +1,3 @@
 node_modules/
-*.json.key
 dist/
 .DS_Store

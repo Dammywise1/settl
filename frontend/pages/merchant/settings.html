@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>SETTL — Settings</title><link rel="stylesheet" href="/css/app.css"/></head>
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL — Settings</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
 <body>
 <div id="sidebar-overlay" class="sidebar-overlay"></div>
 <div class="app-shell">
@@ -8,43 +12,123 @@
   <div class="main-content">
     <div class="topbar"><div class="topbar-left"><button class="menu-btn" onclick="openSidebar()">☰</button><span class="topbar-title">Settings</span></div></div>
     <div class="page-body">
-      <div class="card" style="max-width:480px;">
+
+      <!-- Account -->
+      <div class="card" style="max-width:520px;">
         <div class="card-title-row"><h2>Account</h2></div>
-        <div class="form-group"><label class="form-label">Full name</label><input class="form-input" id="f-name" placeholder="Your name"/></div>
+        <div class="form-group"><label class="form-label">Full name</label><input class="form-input" id="f-name"/></div>
         <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="f-email" readonly style="background:var(--bg);"/></div>
-        <div id="save-ok" class="alert alert-success" style="display:none;">Changes saved!</div>
-        <button class="btn btn-primary" onclick="save()">Save</button>
+        <div id="account-ok" class="alert alert-success" style="display:none;">Saved!</div>
+        <button class="btn btn-primary" onclick="saveAccount()">Save account</button>
       </div>
-      <div class="card" style="max-width:480px;">
+
+      <!-- Branding -->
+      <div class="card" style="max-width:520px;">
+        <div class="card-title-row"><h2>Checkout branding</h2></div>
+        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;">
+          Customise what customers see on your checkout page.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Business name (shown on checkout)</label>
+          <input class="form-input" id="f-brand-name" placeholder="e.g. Azeez Coffee Shop"/>
+          <div class="form-hint">If blank, your account name is used.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Logo URL <span style="color:var(--text-hint);font-weight:400;">— optional</span></label>
+          <input class="form-input" id="f-logo-url" type="url" placeholder="https://yoursite.com/logo.png"/>
+          <div class="form-hint">PNG, JPG or SVG. Recommended: 200×80px or square.</div>
+        </div>
+        <div id="logo-preview" style="display:none;margin-bottom:14px;">
+          <img id="logo-preview-img" src="" style="max-height:48px;border-radius:6px;border:1px solid var(--border);" onerror="document.getElementById('logo-preview').style.display='none'"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Default success redirect URL <span style="color:var(--text-hint);font-weight:400;">— optional</span></label>
+          <input class="form-input" id="f-success-url" type="url" placeholder="https://yoursite.com/thank-you"/>
+          <div class="form-hint">After payment confirmed, customer is redirected here. Can be overridden per payment session.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Support email <span style="color:var(--text-hint);font-weight:400;">— optional</span></label>
+          <input class="form-input" id="f-support-email" type="email" placeholder="support@yoursite.com"/>
+          <div class="form-hint">Shown on checkout if customer needs help.</div>
+        </div>
+        <div id="brand-ok" class="alert alert-success" style="display:none;">Branding saved!</div>
+        <button class="btn btn-primary" onclick="saveBranding()">Save branding</button>
+      </div>
+
+      <!-- Merchant info -->
+      <div class="card" style="max-width:520px;">
         <div class="card-title-row"><h2>Merchant info</h2></div>
         <div class="info-grid" id="m-info"><span class="info-label">Loading…</span><span></span></div>
       </div>
+
     </div>
   </div>
 </div>
-<script src="/js/modules/api.js"></script><script src="/js/modules/auth.js"></script><script src="/js/modules/toast.js"></script><script src="/js/modules/nav.js"></script>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
 <script>
   if (!auth.requireAuth()) throw 0;
   initSidebar();
-  const u=auth.getUser();
-  document.getElementById('f-name').value  = u?.full_name||'';
-  document.getElementById('f-email').value = u?.email||'';
-  async function save(){
-    try{
-      const res=await api.patch('/auth/profile',{full_name:document.getElementById('f-name').value});
-      if(res.user) auth.save(auth.getToken(),res.user,auth.getMerchant());
-      document.getElementById('save-ok').style.display='';
-      setTimeout(()=>document.getElementById('save-ok').style.display='none',2500);
-    }catch(err){toast.error(err.message);}
+
+  const u = auth.getUser();
+  document.getElementById('f-name').value  = u?.full_name || '';
+  document.getElementById('f-email').value = u?.email     || '';
+
+  // Logo preview
+  document.getElementById('f-logo-url').addEventListener('input', e => {
+    const val = e.target.value.trim();
+    const prev = document.getElementById('logo-preview');
+    const img  = document.getElementById('logo-preview-img');
+    if (val) { img.src = val; prev.style.display = ''; }
+    else     { prev.style.display = 'none'; }
+  });
+
+  async function saveAccount() {
+    try {
+      const full_name = document.getElementById('f-name').value.trim();
+      await api.patch('/auth/profile', { full_name });
+      const user = auth.getUser();
+      auth.save(auth.getToken(), { ...user, full_name }, auth.getMerchant());
+      document.getElementById('account-ok').style.display = '';
+      setTimeout(()=>document.getElementById('account-ok').style.display='none', 2500);
+    } catch(err) { toast.error(err.message); }
   }
-  api.merchant.me().then(({merchant})=>{
-    if(!merchant) return;
-    document.getElementById('m-info').innerHTML=`
-      <span class="info-label">Merchant ID</span><span class="info-value n">${merchant.merchant_id}</span>
-      <span class="info-label">Wallet</span><span class="info-value">${merchant.wallet_address}</span>
-      <span class="info-label">Vault PDA</span><span class="info-value">${merchant.vault_address||'Pending…'}</span>
+
+  async function saveBranding() {
+    try {
+      const updates = {
+        brand_name:    document.getElementById('f-brand-name').value.trim()   || null,
+        brand_logo_url:document.getElementById('f-logo-url').value.trim()     || null,
+        success_url:   document.getElementById('f-success-url').value.trim()  || null,
+        support_email: document.getElementById('f-support-email').value.trim()|| null,
+      };
+      await api.patch('/merchants/me/branding', updates);
+      document.getElementById('brand-ok').style.display = '';
+      setTimeout(()=>document.getElementById('brand-ok').style.display='none', 2500);
+      toast.success('Branding saved!');
+    } catch(err) { toast.error(err.message); }
+  }
+
+  api.merchant.me().then(({ merchant }) => {
+    if (!merchant) return;
+    document.getElementById('f-brand-name').value   = merchant.brand_name     || '';
+    document.getElementById('f-logo-url').value     = merchant.brand_logo_url || '';
+    document.getElementById('f-success-url').value  = merchant.success_url    || '';
+    document.getElementById('f-support-email').value= merchant.support_email  || '';
+    if (merchant.brand_logo_url) {
+      document.getElementById('logo-preview-img').src = merchant.brand_logo_url;
+      document.getElementById('logo-preview').style.display = '';
+    }
+    document.getElementById('m-info').innerHTML = `
+      <span class="info-label">Merchant ID</span><span style="font-family:var(--font-mono);font-size:12px;">${merchant.merchant_id}</span>
+      <span class="info-label">Wallet</span><span style="font-family:var(--font-mono);font-size:12px;cursor:pointer;color:var(--brand);" onclick="navigator.clipboard.writeText('${merchant.wallet_address}').then(()=>toast.success('Copied!'))">${merchant.wallet_address?.slice(0,12)}…</span>
+      <span class="info-label">Vault PDA</span><span style="font-family:var(--font-mono);font-size:12px;">${merchant.vault_address?.slice(0,12)||'—'}…</span>
       <span class="info-label">Status</span><span><span class="badge ${merchant.is_active?'badge-success':'badge-pending'}">${merchant.registration_status}</span></span>
     `;
   }).catch(()=>{});
 </script>
-</body></html>
+</body>
+</html>

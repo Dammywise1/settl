@@ -21,12 +21,9 @@ async function req(path, opts = {}) {
   return data;
 }
 
-// Plain fetch — NO Authorization header, NO auth
-// Used for public endpoints that must work without login
 async function publicGet(path) {
-  const res  = await fetch(path); // full path passed in
+  const res  = await fetch(path);
   const data = await res.json().catch(() => ({}));
-  // Don't throw on non-200 for poll — just return the data
   return data;
 }
 
@@ -46,24 +43,31 @@ const api = {
   },
 
   merchant: {
-    me:         () => api.get('/merchants/me'),
-    sessions:   () => api.get('/merchants/me/sessions'),
+    me:           () => api.get('/merchants/me'),
+    sessions:     () => api.get('/merchants/me/sessions'),
     releases:     () => api.get('/merchants/me/releases'),
     transactions: (p) => api.get('/merchants/me/transactions?' + new URLSearchParams(p||{})),
-    releaseNow: () => api.post('/release/me', {}),
+    releaseNow:   () => api.post('/release/me', {}),
   },
 
   payments: {
-    // Protected — creates a new session (requires JWT login)
-    session: (b) => api.post('/payments/session', b),
-
-    // ── PUBLIC — uses /api/public prefix, NO auth header ──
-    // These work for anyone — merchant page, checkout page,
-    // any customer with a link. No JWT, no API key.
+    session:     (b)   => api.post('/payments/session', b),
     pollPublic:  (ref) => publicGet(`/api/public/poll/${ref}`),
     sessionInfo: (ref) => publicGet(`/api/public/session/${ref}`),
+    linkInfo:    (slug)=> publicGet(`/api/public/link/${slug}`),
+    saveNote:    (ref, note) => fetch(`/api/public/note/${ref}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note }),
+    }).then(r => r.json()),
+    history:     ()    => api.get('/payments/history'),
+  },
 
-    history: () => api.get('/payments/history'),
+  links: {
+    list:     ()       => api.get('/links'),
+    create:   (b)      => api.post('/links', b),
+    update:   (id, b)  => api.patch(`/links/${id}`, b),
+    delete:   (id)     => api.delete(`/links/${id}`),
+    sessions: (id)     => api.get(`/links/${id}/sessions`),
   },
 
   webhooks: {

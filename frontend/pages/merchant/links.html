@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL — Payment links</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left"><button class="menu-btn" onclick="openSidebar()">☰</button><span class="topbar-title">Payment links</span></div>
+    </div>
+    <div class="page-body">
+
+      <!-- Explainer -->
+      <div class="alert alert-info" style="margin-bottom:16px;">
+        <strong>Reusable links</strong> — Share once, accept payments forever. Each customer visit creates a fresh payment session. Perfect for tip jars, product pages, and invoices.
+      </div>
+
+      <!-- Create form -->
+      <div class="card" style="max-width:560px;">
+        <div class="card-title-row"><h2>Create a reusable link</h2></div>
+
+        <div class="form-group">
+          <label class="form-label">Title <span style="color:var(--coral)">*</span></label>
+          <input class="form-input" id="f-title" placeholder="e.g. Coffee tip jar, Order payment"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description <span style="color:var(--text-hint);font-weight:400;">— optional</span></label>
+          <input class="form-input" id="f-desc" placeholder="Shown to customer on checkout"/>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Fixed amount (AUDD) <span style="color:var(--text-hint);font-weight:400;">— blank for open</span></label>
+            <input class="form-input" id="f-amount" type="number" min="0.01" step="0.01" placeholder="e.g. 10.00"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select class="form-input" id="f-reusable">
+              <option value="true">Reusable (permanent link)</option>
+              <option value="false">Single use</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" id="expiry-group" style="display:none;">
+          <label class="form-label">Expires after</label>
+          <select class="form-input" id="f-expiry">
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="1440">24 hours</option>
+            <option value="10080">7 days</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Redirect after payment <span style="color:var(--text-hint);font-weight:400;">— optional</span></label>
+          <input class="form-input" id="f-success" type="url" placeholder="https://yoursite.com/thank-you"/>
+        </div>
+        <div id="create-err" class="alert alert-error" style="display:none;"></div>
+        <button class="btn btn-primary" onclick="createLink()">Create link</button>
+      </div>
+
+      <!-- Links list -->
+      <div class="card">
+        <div class="card-title-row"><h2>Your payment links</h2><button class="btn btn-secondary btn-sm" onclick="loadLinks()">Refresh</button></div>
+        <div id="links-list">
+          <div style="text-align:center;padding:28px;color:var(--text-hint);">Loading…</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- New link modal -->
+<div class="modal-wrap" id="link-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Link created!</span>
+      <button class="modal-close" onclick="closeLinkModal()">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Share URL</label>
+      <div style="display:flex;gap:8px;">
+        <input class="form-input" id="new-link-url" readonly style="flex:1;font-size:12px;font-family:var(--font-mono);"/>
+        <button class="btn btn-secondary" onclick="copyNewLink()">Copy</button>
+      </div>
+    </div>
+    <div class="form-hint" style="margin-bottom:14px;">
+      This link creates a fresh payment session each time a customer opens it.
+    </div>
+    <div style="display:flex;gap:8px;">
+      <a id="new-link-open" href="#" target="_blank" class="btn btn-secondary" style="flex:1;">Open</a>
+      <a id="new-link-wa" href="#" target="_blank" class="btn" style="background:#25D366;color:#fff;border:none;flex:1;">WhatsApp</a>
+    </div>
+    <button class="btn btn-primary btn-full" style="margin-top:12px;" onclick="closeLinkModal()">Done</button>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  initSidebar();
+
+  document.getElementById('f-reusable').addEventListener('change', e => {
+    document.getElementById('expiry-group').style.display = e.target.value === 'false' ? '' : 'none';
+  });
+
+  async function createLink() {
+    const title      = document.getElementById('f-title').value.trim();
+    const desc       = document.getElementById('f-desc').value.trim();
+    const amount     = document.getElementById('f-amount').value;
+    const isReusable = document.getElementById('f-reusable').value === 'true';
+    const expiry     = parseInt(document.getElementById('f-expiry').value);
+    const success    = document.getElementById('f-success').value.trim();
+    document.getElementById('create-err').style.display = 'none';
+
+    if (!title) { document.getElementById('create-err').textContent = 'Title is required'; document.getElementById('create-err').style.display = ''; return; }
+
+    try {
+      const { link, share_url } = await api.links.create({
+        title, description: desc || null,
+        amount: amount ? parseFloat(amount) : null,
+        is_reusable: isReusable,
+        expiry_minutes: !isReusable ? expiry : null,
+        success_url: success || null,
+      });
+
+      // Show modal
+      document.getElementById('new-link-url').value = share_url;
+      document.getElementById('new-link-open').href = share_url;
+      const wa = encodeURIComponent(`Pay via SETTL: ${share_url}`);
+      document.getElementById('new-link-wa').href = `https://wa.me/?text=${wa}`;
+      document.getElementById('link-modal').classList.add('show');
+
+      // Clear form
+      ['f-title','f-desc','f-amount','f-success'].forEach(id => document.getElementById(id).value = '');
+      loadLinks();
+    } catch(err) {
+      document.getElementById('create-err').textContent = err.message;
+      document.getElementById('create-err').style.display = '';
+    }
+  }
+
+  function copyNewLink() {
+    navigator.clipboard.writeText(document.getElementById('new-link-url').value)
+      .then(()=>toast.success('Copied!'));
+  }
+  function closeLinkModal() { document.getElementById('link-modal').classList.remove('show'); }
+
+  async function loadLinks() {
+    const el = document.getElementById('links-list');
+    try {
+      const { links } = await api.links.list();
+      if (!links.length) {
+        el.innerHTML = '<div style="text-align:center;padding:28px;color:var(--text-hint);">No payment links yet — create one above.</div>';
+        return;
+      }
+      el.innerHTML = links.map(l => `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;margin-bottom:3px;">${l.title}</div>
+            ${l.description ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">${l.description}</div>` : ''}
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+              <span class="badge ${l.is_reusable?'badge-success':'badge-info'}">${l.is_reusable?'Reusable':'Single use'}</span>
+              ${l.amount ? `<span class="badge badge-pending">${Number(l.amount).toFixed(2)} AUDD</span>` : '<span class="badge badge-info">Open amount</span>'}
+              <span style="font-size:11px;color:var(--text-muted);">Uses: ${l.total_uses||0}</span>
+              <span style="font-size:11px;color:var(--text-muted);">Vol: ${Number(l.total_volume||0).toFixed(2)} AUDD</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="copyLinkUrl('/pay/${l.slug}')">Copy</button>
+            <a href="/pay/${l.slug}" target="_blank" class="btn btn-secondary btn-sm">Open</a>
+            <button class="btn ${l.is_active?'btn-secondary':'btn-primary'} btn-sm"
+                    onclick="toggleLink('${l.id}',${l.is_active})">${l.is_active?'Disable':'Enable'}</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteLink('${l.id}','${l.title}')">Delete</button>
+          </div>
+        </div>`).join('');
+    } catch(err) { toast.error(err.message); }
+  }
+
+  function copyLinkUrl(path) {
+    navigator.clipboard.writeText(location.origin + path).then(()=>toast.success('Link copied!'));
+  }
+
+  async function toggleLink(id, isActive) {
+    try { await api.links.update(id, { is_active: !isActive }); loadLinks(); }
+    catch(err) { toast.error(err.message); }
+  }
+
+  async function deleteLink(id, title) {
+    if (!confirm(`Delete "${title}"?`)) return;
+    try { await api.links.delete(id); loadLinks(); toast.success('Deleted'); }
+    catch(err) { toast.error(err.message); }
+  }
+
+  loadLinks();
+</script>
+</body>
+</html>

@@ -14,45 +14,67 @@ function getBaseUrl(reqHost) {
 }
 
 // ── createPaymentSession ──────────────────────────────────
-async function createPaymentSession({ merchantId, amountAudd, message, memo }, reqHost) {
+// Creates a one-time payment session.
+// Called by the dashboard paylink page and the API key endpoint.
+async function createPaymentSession({
+  merchantId, amountAudd, message, memo,
+  expiryMinutes,   // null = default 30min
+  successUrl,      // override merchant default
+  paymentLinkId,   // if created from a reusable link
+}, reqHost) {
+
   const { data: merchant } = await supabase
     .from('merchants')
-    .select('vault_address, wallet_address, name, is_active, registration_status')
+    .select('vault_address, wallet_address, name, brand_name, brand_logo_url, success_url, is_active, registration_status')
     .eq('merchant_id', merchantId)
     .maybeSingle();
 
   if (!merchant)               throw new Error('Merchant not found');
-  if (!merchant.is_active)     throw new Error(`Merchant not active yet (${merchant.registration_status}). Try again in a moment.`);
-  if (!merchant.vault_address) throw new Error('Vault not ready yet — registration still processing. Try again in a moment.');
+  if (!merchant.is_active)     throw new Error(`Merchant not active (${merchant.registration_status}). Try again in a moment.`);
+  if (!merchant.vault_address) throw new Error('Vault not ready — registration still processing. Try again shortly.');
 
   const referenceKp = Keypair.generate();
   const reference   = referenceKp.publicKey;
   const recipient   = new PublicKey(merchant.vault_address);
   const splToken    = new PublicKey(process.env.AUDD_MINT);
-  const label       = merchant.name || merchantId;
+  const label       = merchant.brand_name || merchant.name || merchantId;
   const msgText     = message || `Payment to ${label}`;
   const amount      = amountAudd ? new BigNumber(amountAudd) : undefined;
 
   const { encodeURL } = sp();
   const urlFields = {
     recipient, splToken, reference: [reference], label, message: msgText,
-    ...(memo ? { memo } : {}), ...(amount ? { amount } : {}),
+    ...(memo   ? { memo }   : {}),
+    ...(amount ? { amount } : {}),
   };
 
   const solanaUrl   = encodeURL(urlFields).toString();
   const baseUrl     = getBaseUrl(reqHost);
   const checkoutUrl = `${baseUrl}/pages/checkout.html?ref=${reference.toBase58()}`;
 
+  // Expiry: default 30min, or merchant-specified, or null (never)
+  let expiresAt = null;
+  const mins = expiryMinutes !== undefined ? expiryMinutes : 30;
+  if (mins && mins > 0) {
+    expiresAt = new Date(Date.now() + mins * 60_000).toISOString();
+  }
+
+  // Success URL: session override → merchant default → null
+  const resolvedSuccessUrl = successUrl || merchant.success_url || null;
+
   const { data: session } = await supabase
     .from('payment_sessions')
     .insert({
-      merchant_id:   merchantId,
-      amount:        amountAudd || null,
-      reference_key: reference.toBase58(),
+      merchant_id:     merchantId,
+      amount:          amountAudd || null,
+      reference_key:   reference.toBase58(),
       label,
-      message:       msgText,
-      memo:          memo || null,
-      status:        'pending',
+      message:         msgText,
+      memo:            memo || null,
+      status:          'pending',
+      expires_at:      expiresAt,
+      success_url:     resolvedSuccessUrl,
+      payment_link_id: paymentLinkId || null,
     })
     .select()
     .single();
@@ -66,8 +88,51 @@ async function createPaymentSession({ merchantId, amountAudd, message, memo }, r
     amount:        amountAudd || null,
     label,
     message:       msgText,
-    merchant_name: merchant.name || merchantId,
+    merchant_name: label,
+    brand_logo:    merchant.brand_logo_url || null,
+    success_url:   resolvedSuccessUrl,
     checkout_url:  checkoutUrl,
+    expires_at:    expiresAt,
+  };
+}
+
+// ── createSessionFromLink ─────────────────────────────────
+// Called when a customer opens a reusable payment link.
+// Creates a fresh session each time.
+async function createSessionFromLink(slug, reqHost) {
+  const { data: link } = await supabase
+    .from('payment_links')
+    .select('*, merchants(merchant_id, vault_address, name, brand_name, brand_logo_url, success_url, is_active)')
+    .eq('slug', slug)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (!link)                      throw new Error('Payment link not found or inactive');
+  if (!link.merchants.is_active)  throw new Error('Merchant is not active');
+
+  const session = await createPaymentSession({
+    merchantId:     link.merchant_id,
+    amountAudd:     link.amount || null,
+    message:        link.title,
+    expiryMinutes:  link.is_reusable ? null : (link.expiry_minutes || 30),
+    successUrl:     link.success_url,
+    paymentLinkId:  link.id,
+  }, reqHost);
+
+  // Update link usage counter
+  await supabase
+    .from('payment_links')
+    .update({ total_uses: (link.total_uses || 0) + 1 })
+    .eq('id', link.id);
+
+  return {
+    ...session,
+    link: {
+      slug:        link.slug,
+      title:       link.title,
+      description: link.description,
+      is_reusable: link.is_reusable,
+    },
   };
 }
 
@@ -75,21 +140,25 @@ async function createPaymentSession({ merchantId, amountAudd, message, memo }, r
 async function pollPaymentSession(referenceKey) {
   const { data: session } = await supabase
     .from('payment_sessions')
-    .select('*, merchants(vault_address, name, wallet_address)')
+    .select('*, merchants(vault_address, name, brand_name, brand_logo_url, wallet_address, success_url)')
     .eq('reference_key', referenceKey)
     .maybeSingle();
 
   if (!session) return { status: 'not_found' };
-  if (session.status === 'confirmed') return { status: 'confirmed', tx: session.tx_signature };
-  if (session.status === 'expired')   return { status: 'expired' };
-  if (session.status === 'failed')    return { status: 'failed' };
+  if (session.status === 'confirmed') return {
+    status:      'confirmed',
+    tx:          session.tx_signature,
+    success_url: session.success_url,
+    is_overpaid: session.is_overpaid,
+    is_underpaid: session.is_underpaid,
+    amount_received: session.amount_received,
+  };
+  if (session.status === 'expired') return { status: 'expired' };
+  if (session.status === 'failed')  return { status: 'failed' };
 
   // Check expiry
   if (session.expires_at && new Date(session.expires_at) < new Date()) {
-    await supabase
-      .from('payment_sessions')
-      .update({ status: 'expired' })
-      .eq('reference_key', referenceKey);
+    await supabase.from('payment_sessions').update({ status: 'expired' }).eq('reference_key', referenceKey);
     return { status: 'expired' };
   }
 
@@ -102,22 +171,14 @@ async function pollPaymentSession(referenceKey) {
     const splToken     = new PublicKey(process.env.AUDD_MINT);
     const sessionStart = new Date(session.created_at).getTime() / 1000;
 
-    // Method 1: findReference (works if wallet includes reference key)
+    // Method 1: findReference
     try {
       const { findReference, validateTransfer } = sp();
       const reference = new PublicKey(referenceKey);
       const sigInfo   = await findReference(connection, reference, { finality: 'confirmed' });
       if (sigInfo) {
-        if (session.amount) {
-          try {
-            await validateTransfer(connection, sigInfo.signature, {
-              recipient: vaultPubkey,
-              amount:    new BigNumber(session.amount),
-              splToken,
-            });
-          } catch { /* fall through to vault scan */ }
-        }
-        return await confirmSession(session, sigInfo.signature, referenceKey);
+        const received = await getReceivedAmount(connection, sigInfo.signature, splToken);
+        return await confirmSession(session, sigInfo.signature, referenceKey, received);
       }
     } catch (e) {
       if (!e.name?.includes('FindReference') && !e.message?.includes('not found')) {
@@ -125,7 +186,7 @@ async function pollPaymentSession(referenceKey) {
       }
     }
 
-    // Method 2: Watch vault's recent signatures directly
+    // Method 2: vault signature scan
     const signatures = await connection.getSignaturesForAddress(vaultPubkey, {
       limit: 10, commitment: 'confirmed',
     });
@@ -134,12 +195,9 @@ async function pollPaymentSession(referenceKey) {
       if (sig.blockTime && sig.blockTime < sessionStart - 5) continue;
       if (sig.err) continue;
 
-      // Skip if another session already claimed this tx
       const { data: existing } = await supabase
         .from('payment_sessions')
-        .select('id')
-        .eq('tx_signature', sig.signature)
-        .maybeSingle();
+        .select('id').eq('tx_signature', sig.signature).maybeSingle();
       if (existing && existing.id !== session.id) continue;
 
       const tx = await connection.getParsedTransaction(sig.signature, {
@@ -147,93 +205,128 @@ async function pollPaymentSession(referenceKey) {
       });
       if (!tx?.meta) continue;
 
-      const pre  = tx.meta.preTokenBalances  || [];
-      const post = tx.meta.postTokenBalances || [];
-
-      const vaultPost = post.find(b => b.mint === splToken.toBase58());
-      const vaultPre  = pre.find(b =>
-        b.mint === splToken.toBase58() &&
-        vaultPost && b.accountIndex === vaultPost.accountIndex
-      );
-
-      const postAmt  = parseFloat(vaultPost?.uiTokenAmount?.uiAmountString || '0');
-      const preAmt   = parseFloat(vaultPre?.uiTokenAmount?.uiAmountString  || '0');
-      const received = postAmt - preAmt;
-
+      const received = getReceivedFromMeta(tx.meta, splToken.toBase58());
       if (received <= 0) continue;
 
-      if (session.amount !== null && session.amount !== undefined) {
-        if (Math.abs(received - parseFloat(session.amount)) > 0.001) continue;
-      }
-
       console.log(`[poll] Confirmed via vault scan: ${sig.signature}, received: ${received} AUDD`);
-      return await confirmSession(session, sig.signature, referenceKey);
+      return await confirmSession(session, sig.signature, referenceKey, received);
     }
 
     return { status: 'pending' };
-
   } catch (err) {
     console.error('[poll]', err.message);
     return { status: 'pending' };
   }
 }
 
+// ── getReceivedAmount ─────────────────────────────────────
+// Parse how much was actually received from a tx signature
+async function getReceivedAmount(connection, signature, splToken) {
+  try {
+    const tx = await connection.getParsedTransaction(signature, {
+      commitment: 'confirmed', maxSupportedTransactionVersion: 0,
+    });
+    if (!tx?.meta) return 0;
+    return getReceivedFromMeta(tx.meta, splToken.toBase58());
+  } catch { return 0; }
+}
+
+function getReceivedFromMeta(meta, splTokenMint) {
+  const pre  = meta.preTokenBalances  || [];
+  const post = meta.postTokenBalances || [];
+  const vaultPost = post.find(b => b.mint === splTokenMint);
+  const vaultPre  = pre.find(b =>
+    b.mint === splTokenMint && vaultPost && b.accountIndex === vaultPost.accountIndex
+  );
+  const postAmt = parseFloat(vaultPost?.uiTokenAmount?.uiAmountString || '0');
+  const preAmt  = parseFloat(vaultPre?.uiTokenAmount?.uiAmountString  || '0');
+  return Math.max(0, postAmt - preAmt);
+}
+
 // ── confirmSession ────────────────────────────────────────
-// Called when a payment is detected on-chain.
-// Key fix: reads vault token account balance (real AUDD)
-// and writes it to DB escrows.pending_balance so dashboard
-// shows the correct amount immediately.
-async function confirmSession(session, txSignature, referenceKey) {
+// Handles exact, partial, and over payments
+async function confirmSession(session, txSignature, referenceKey, amountReceived) {
   const now = new Date().toISOString();
 
-  // Mark session confirmed
-  await supabase
-    .from('payment_sessions')
-    .update({ status: 'confirmed', tx_signature: txSignature, confirmed_at: now })
-    .eq('reference_key', referenceKey);
+  const expectedAmount = session.amount ? parseFloat(session.amount) : null;
+  const TOLERANCE = 0.001; // 0.001 AUDD tolerance for rounding
+
+  let isOverpaid  = false;
+  let isUnderpaid = false;
+  let overpayAmt  = 0;
+  let underpayAmt = 0;
+
+  if (expectedAmount !== null && amountReceived > 0) {
+    const diff = amountReceived - expectedAmount;
+    if (diff > TOLERANCE) {
+      isOverpaid = true;
+      overpayAmt = diff;
+      console.log(`[confirm] Overpayment: received ${amountReceived}, expected ${expectedAmount}, over by ${overpayAmt}`);
+    } else if (diff < -TOLERANCE) {
+      isUnderpaid = true;
+      underpayAmt = Math.abs(diff);
+      console.log(`[confirm] Underpayment: received ${amountReceived}, expected ${expectedAmount}, short by ${underpayAmt}`);
+      // For underpayment: still confirm but flag it
+      // Merchant sees the shortfall in dashboard
+    }
+  }
+
+  // Mark session confirmed regardless (merchant decides how to handle underpayment)
+  await supabase.from('payment_sessions').update({
+    status:          'confirmed',
+    tx_signature:    txSignature,
+    confirmed_at:    now,
+    amount_received: amountReceived || null,
+    is_overpaid:     isOverpaid,
+    is_underpaid:    isUnderpaid,
+    overpay_amount:  isOverpaid  ? overpayAmt  : null,
+    underpay_amount: isUnderpaid ? underpayAmt : null,
+  }).eq('reference_key', referenceKey);
 
   // Record transaction
   await supabase.from('transactions').insert({
-    merchant_id:   session.merchant_id,
-    type:          'deposit',
-    amount:        session.amount || 0,
-    tx_signature:  txSignature,
-    reference_key: referenceKey,
-    status:        'confirmed',
+    merchant_id:     session.merchant_id,
+    type:            'deposit',
+    amount:          session.amount || amountReceived || 0,
+    tx_signature:    txSignature,
+    reference_key:   referenceKey,
+    status:          'confirmed',
+    customer_note:   session.customer_note || null,
+    amount_received: amountReceived || null,
+    is_overpaid:     isOverpaid,
+    is_underpaid:    isUnderpaid,
   }).then(() => {}).catch(e => console.warn('[confirm] tx insert:', e.message));
 
-  // ── BALANCE SYNC ──────────────────────────────────────────
-  // Get the merchant's vault address
+  // Sync vault balance to DB
   const { data: merchant } = await supabase
-    .from('merchants')
-    .select('vault_address')
-    .eq('merchant_id', session.merchant_id)
-    .maybeSingle();
+    .from('merchants').select('vault_address').eq('merchant_id', session.merchant_id).maybeSingle();
 
   if (merchant?.vault_address) {
-    // Read vault token account balance — this is the real AUDD held
     const vaultBalance = await getVaultTokenBalance(merchant.vault_address);
-    const pendingAudd  = vaultBalance.uiAmount || 0;
-
-    console.log(`[confirm] Vault balance: ${pendingAudd} AUDD for ${session.merchant_id}`);
-
-    // Count total confirmed payments for this merchant
     const { count } = await supabase
       .from('payment_sessions')
       .select('id', { count: 'exact', head: true })
       .eq('merchant_id', session.merchant_id)
       .eq('status', 'confirmed');
 
-    // Update DB escrow with real vault balance
-    await supabase
-      .from('escrows')
-      .update({
-        pending_balance: pendingAudd,
-        total_payments:  count || 0,
-      })
-      .eq('merchant_id', session.merchant_id);
+    await supabase.from('escrows').update({
+      pending_balance: vaultBalance.uiAmount || 0,
+      total_payments:  count || 0,
+    }).eq('merchant_id', session.merchant_id);
 
-    console.log(`[confirm] Escrow synced: ${pendingAudd} AUDD, ${count} payments`);
+    // Update payment link volume if applicable
+    if (session.payment_link_id) {
+      await supabase.rpc('increment_link_volume', {
+        link_id: session.payment_link_id,
+        amount:  amountReceived || 0,
+      }).catch(() => {
+        // RPC may not exist yet — do a manual update
+        supabase.from('payment_links')
+          .update({ total_volume: (amountReceived || 0) })
+          .eq('id', session.payment_link_id)
+          .then(() => {}).catch(() => {});
+      });
+    }
   }
 
   // Fire webhook + email (non-blocking)
@@ -241,48 +334,36 @@ async function confirmSession(session, txSignature, referenceKey) {
     try {
       const { dispatch } = require('./webhook');
       await dispatch(session.merchant_id, 'deposit.confirmed', {
-        reference_key: referenceKey,
-        amount:        session.amount || 0,
-        tx_signature:  txSignature,
-        confirmed_at:  now,
+        reference_key:   referenceKey,
+        amount:          session.amount || 0,
+        amount_received: amountReceived || 0,
+        tx_signature:    txSignature,
+        confirmed_at:    now,
+        is_overpaid:     isOverpaid,
+        is_underpaid:    isUnderpaid,
+        overpay_amount:  overpayAmt  || null,
+        underpay_amount: underpayAmt || null,
+        customer_note:   session.customer_note || null,
       });
     } catch (e) { console.warn('[confirm] webhook:', e.message); }
 
     try {
       const emailSvc = require('./email');
-      const { data: merchantData } = await supabase
-        .from('merchants')
-        .select('user_id, name')
-        .eq('merchant_id', session.merchant_id)
-        .maybeSingle();
-
-      if (merchantData?.user_id) {
-        const { data: user } = await supabase
-          .from('users')
-          .select('email')
-          .eq('id', merchantData.user_id)
-          .maybeSingle();
-
-        if (user?.email) {
-          const { data: already } = await supabase
-            .from('notification_log')
-            .select('id')
-            .eq('ref', referenceKey)
-            .eq('type', 'deposit.confirmed')
-            .maybeSingle();
-
+      const { data: m } = await supabase
+        .from('merchants').select('user_id, name').eq('merchant_id', session.merchant_id).maybeSingle();
+      if (m?.user_id) {
+        const { data: u } = await supabase.from('users').select('email').eq('id', m.user_id).maybeSingle();
+        if (u?.email) {
+          const { data: already } = await supabase.from('notification_log')
+            .select('id').eq('ref', referenceKey).eq('type', 'deposit.confirmed').maybeSingle();
           if (!already) {
             await emailSvc.sendDepositConfirmed({
-              email:        user.email,
-              merchantName: merchantData.name || session.merchant_id,
-              amount:       session.amount || 0,
-              txSignature,
-              reference:    referenceKey,
+              email: u.email, merchantName: m.name,
+              amount: amountReceived || session.amount || 0,
+              txSignature, reference: referenceKey,
             });
             await supabase.from('notification_log').insert({
-              merchant_id: session.merchant_id,
-              type:        'deposit.confirmed',
-              ref:         referenceKey,
+              merchant_id: session.merchant_id, type: 'deposit.confirmed', ref: referenceKey,
             });
           }
         }
@@ -290,17 +371,31 @@ async function confirmSession(session, txSignature, referenceKey) {
     } catch (e) { console.warn('[confirm] email:', e.message); }
   });
 
-  return { status: 'confirmed', tx: txSignature };
+  return {
+    status:          'confirmed',
+    tx:              txSignature,
+    success_url:     session.success_url,
+    is_overpaid:     isOverpaid,
+    is_underpaid:    isUnderpaid,
+    amount_received: amountReceived,
+    overpay_amount:  overpayAmt  || null,
+    underpay_amount: underpayAmt || null,
+  };
 }
 
 // ── getSessionByRef ───────────────────────────────────────
 async function getSessionByRef(referenceKey) {
   const { data } = await supabase
     .from('payment_sessions')
-    .select('*, merchants(name, vault_address, wallet_address)')
+    .select('*, merchants(name, brand_name, brand_logo_url, vault_address, wallet_address, success_url)')
     .eq('reference_key', referenceKey)
     .maybeSingle();
   return data;
 }
 
-module.exports = { createPaymentSession, pollPaymentSession, getSessionByRef };
+module.exports = {
+  createPaymentSession,
+  createSessionFromLink,
+  pollPaymentSession,
+  getSessionByRef,
+};
