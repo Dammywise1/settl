@@ -1,0 +1,33 @@
+# Dependencies (reinstalled in Docker)
+backend/node_modules
+node_modules
+
+# Environment files (set as Railway env vars)
+.env
+.env.*
+!.env.example
+
+# Dev files
+*.log
+*.md
+.git
+.gitignore
+*.sh
+*.bak
+
+# Supabase migrations (not needed at runtime)
+supabase/
+
+# Test files
+**/*.test.js
+**/*.spec.js
+test/
+tests/
+__tests__/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store

@@ -1,3 +1,38 @@
+# Dependencies
 node_modules/
+backend/node_modules/
+
+# Environment files — NEVER commit these
+
+
+
+# Keypair — NEVER commit this
+keypair.json
+backend/keypair.json
+*.key
+*.pem
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
 dist/
+build/
+.next/
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backups
+*.bak
+server.js.bak

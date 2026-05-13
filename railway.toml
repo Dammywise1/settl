@@ -1,0 +1,15 @@
+[build]
+# Use our Dockerfile instead of Railway's auto-detect
+dockerfile = "Dockerfile"
+
+[deploy]
+# Health check endpoint
+healthcheckPath    = "/api/health"
+healthcheckTimeout = 30
+
+# Auto-restart on crash
+restartPolicyType    = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Minimum number of instances
+numReplicas = 1

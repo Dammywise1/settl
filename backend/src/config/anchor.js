@@ -9,19 +9,53 @@ const PROGRAM_ID = new PublicKey(
   process.env.SETTL_PROGRAM_ID || 'RZgHzaU8jKm4ydzwkmoooqd2TNek4L9W4o8tthekeLn'
 );
 
-let _provider = null;
-let _program  = null;
-let _keypair  = null;
+let _provider   = null;
+let _program    = null;
+let _keypair    = null;
 let _connection = null;
 
+// ── getKeypair ────────────────────────────────────────────
+// Supports two sources (in priority order):
+//   1. AUTHORITY_KEYPAIR_BASE64 env var (production/Railway)
+//      base64-encoded JSON array of the secret key bytes
+//      Generate: base64 -w 0 keypair.json
+//   2. AUTHORITY_KEYPAIR_PATH file (local development)
+//      Path to keypair.json on disk
 function getKeypair() {
   if (_keypair) return _keypair;
+
+  // Option 1: base64 env var (Railway / production)
+  if (process.env.AUTHORITY_KEYPAIR_BASE64) {
+    try {
+      const decoded = Buffer.from(process.env.AUTHORITY_KEYPAIR_BASE64, 'base64').toString('utf-8');
+      const raw     = JSON.parse(decoded);
+      _keypair      = Keypair.fromSecretKey(Uint8Array.from(raw));
+      console.log('[anchor] Keypair loaded from AUTHORITY_KEYPAIR_BASE64');
+      return _keypair;
+    } catch (err) {
+      throw new Error('AUTHORITY_KEYPAIR_BASE64 is set but could not be decoded: ' + err.message);
+    }
+  }
+
+  // Option 2: file path (local development)
   const kpPath = path.resolve(process.env.AUTHORITY_KEYPAIR_PATH || './keypair.json');
-  if (!fs.existsSync(kpPath)) throw new Error(`Keypair not found: ${kpPath}`);
-  _keypair = Keypair.fromSecretKey(
-    Uint8Array.from(JSON.parse(fs.readFileSync(kpPath, 'utf-8')))
-  );
-  return _keypair;
+  if (!fs.existsSync(kpPath)) {
+    throw new Error(
+      `Authority keypair not found.\n` +
+      `  For local dev: set AUTHORITY_KEYPAIR_PATH in .env\n` +
+      `  For Railway:   set AUTHORITY_KEYPAIR_BASE64 in Railway Variables\n` +
+      `  Generate keypair: solana-keygen new -o keypair.json`
+    );
+  }
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(kpPath, 'utf-8'));
+    _keypair  = Keypair.fromSecretKey(Uint8Array.from(raw));
+    console.log(`[anchor] Keypair loaded from file: ${kpPath}`);
+    return _keypair;
+  } catch (err) {
+    throw new Error(`Failed to load keypair from ${kpPath}: ` + err.message);
+  }
 }
 
 function getConnection() {
@@ -77,20 +111,15 @@ function getConfigPDA() {
 }
 
 // ── getVaultTokenBalance ──────────────────────────────────
-// Reads the actual AUDD balance from the vault token account.
-// This is the source of truth for pending balance because
-// Solana Pay sends tokens directly to vault — the deposit()
-// instruction is NOT called, so escrow.pendingBalance stays
-// 0 on-chain. The token account balance is real.
 async function getVaultTokenBalance(vaultAddress) {
   try {
-    const connection = getConnection();
-    const vaultPubkey = new PublicKey(vaultAddress);
-    const balance = await connection.getTokenAccountBalance(vaultPubkey, 'confirmed');
+    const balance = await getConnection().getTokenAccountBalance(
+      new PublicKey(vaultAddress), 'confirmed'
+    );
     return {
-      amount:    balance.value.amount,          // raw integer string
-      uiAmount:  balance.value.uiAmount || 0,   // decimal AUDD
-      decimals:  balance.value.decimals,
+      amount:   balance.value.amount,
+      uiAmount: balance.value.uiAmount || 0,
+      decimals: balance.value.decimals,
     };
   } catch (err) {
     console.warn('[anchor] getVaultTokenBalance failed:', err.message);
@@ -98,37 +127,9 @@ async function getVaultTokenBalance(vaultAddress) {
   }
 }
 
-// ── getEscrowOnChain ──────────────────────────────────────
-// Reads the EscrowAccount PDA (contract state).
-// Note: pendingBalance here only reflects deposit() calls,
-// not direct token transfers via Solana Pay.
-async function getEscrowOnChain(merchantId) {
-  try {
-    const program     = getProgram();
-    const [escrowPDA] = getEscrowPDA(merchantId);
-    const acc         = await program.account.escrowAccount.fetch(escrowPDA);
-    return {
-      pendingBalance: acc.pendingBalance.toNumber(),
-      totalPayments:  acc.totalPayments.toNumber(),
-      lastReleasedAt: acc.lastReleasedAt.toNumber(),
-      merchantWallet: acc.merchantWallet.toBase58(),
-    };
-  } catch (err) {
-    console.warn('[anchor] getEscrowOnChain failed:', err.message);
-    return null;
-  }
-}
-
 module.exports = {
-  getProvider,
-  getProgram,
-  getKeypair,
-  getConnection,
-  getMerchantPDA,
-  getEscrowPDA,
-  getVaultPDA,
-  getConfigPDA,
+  getProvider, getProgram, getKeypair, getConnection,
+  getMerchantPDA, getEscrowPDA, getVaultPDA, getConfigPDA,
   getVaultTokenBalance,
-  getEscrowOnChain,
   PROGRAM_ID,
 };
