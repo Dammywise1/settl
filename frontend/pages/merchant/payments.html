@@ -67,7 +67,7 @@
   initSidebar();
 
   const EX='https://explorer.solana.com/tx/', CL='?cluster=devnet';
-  const fmtA = v => v!=null ? Number(v).toFixed(4)+' AUDD' : '—';
+  const fmtA = v => v!=null ? Number(v).toFixed(2)+' AUDD' : '—';
   function shortKey(k) { return k ? k.slice(0,6)+'…'+k.slice(-4) : '—'; }
   function nextRelease() {
     const now=new Date(),next=new Date(); next.setUTCHours(6,0,0,0);
@@ -182,9 +182,9 @@
       const totalGross = logs.reduce((s,r)=>s+Number(r.gross||0),0);
       const totalNet   = logs.reduce((s,r)=>s+Number(r.net  ||0),0);
       const totalFee   = logs.reduce((s,r)=>s+Number(r.fee  ||0),0);
-      document.getElementById('s-gross').textContent = totalGross.toFixed(4)+' AUDD';
-      document.getElementById('s-net').textContent   = totalNet.toFixed(4)+' AUDD';
-      document.getElementById('s-fee').textContent   = totalFee.toFixed(4)+' AUDD';
+      document.getElementById('s-gross').textContent = totalGross.toFixed(2)+' AUDD';
+      document.getElementById('s-net').textContent   = totalNet.toFixed(2)+' AUDD';
+      document.getElementById('s-fee').textContent   = totalFee.toFixed(2)+' AUDD';
 
       const sb = document.getElementById('sess-tbody');
       sb.innerHTML = sessions.length ? sessions.map(s=>`<tr>
