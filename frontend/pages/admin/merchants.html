@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL Admin — Merchants</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    .admin-badge { display:inline-flex; align-items:center; gap:4px; background:#FEF3C7; border:1px solid #FCD34D; color:#78350F; border-radius:20px; padding:2px 10px; font-size:12px; font-weight:600; margin-left:8px; }
+  </style>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">SETTL <span class="admin-badge">⚡ Admin</span></div>
+    <div class="sidebar-section">Platform</div>
+    <a href="/pages/admin/index.html"     class="nav-item"><span class="nav-icon">◈</span>Overview</a>
+    <a href="/pages/admin/merchants.html" class="nav-item active"><span class="nav-icon">⊞</span>Merchants</a>
+    <a href="/pages/admin/analytics.html" class="nav-item"><span class="nav-icon">↗</span>Analytics</a>
+    <a href="/pages/admin/releases.html"  class="nav-item"><span class="nav-icon">↑</span>Releases</a>
+    <a href="/pages/admin/settings.html"  class="nav-item"><span class="nav-icon">⚙</span>Settings</a>
+    <div class="sidebar-section">Merchant view</div>
+    <a href="/pages/dashboard.html"       class="nav-item"><span class="nav-icon">←</span>My dashboard</a>
+    <div class="sidebar-footer">
+      <div class="sidebar-user-name" id="admin-name"></div>
+      <a href="#" onclick="handleLogout()" style="font-size:12px;color:var(--text-hint);">Sign out</a>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">All merchants</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Filters -->
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:180px;">
+            <label class="form-label" style="margin-bottom:4px;">Search</label>
+            <input class="form-input" id="f-search" placeholder="Name, email, merchant ID…" oninput="debounceLoad()"/>
+          </div>
+          <div>
+            <label class="form-label" style="margin-bottom:4px;">Status</label>
+            <select class="form-input" id="f-status" onchange="load(true)" style="width:auto;">
+              <option value="">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary" onclick="load(true)">Search</button>
+        </div>
+      </div>
+
+      <!-- Merchant table -->
+      <div class="card">
+        <div class="card-title-row">
+          <h2>Merchants</h2>
+          <span id="total-label" style="font-size:13px;color:var(--text-muted);"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Merchant</th>
+                <th>User</th>
+                <th>Wallet</th>
+                <th>Status</th>
+                <th>Registered</th>
+                <th>Balance</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="m-tbody">
+              <tr><td colspan="7" style="text-align:center;padding:28px;color:var(--text-hint);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Pagination -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap;gap:8px;">
+          <span id="page-info" style="font-size:13px;color:var(--text-muted);"></span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm" id="btn-prev" onclick="changePage(-1)" disabled>← Prev</button>
+            <button class="btn btn-secondary btn-sm" id="btn-next" onclick="changePage(1)"  disabled>Next →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Merchant detail modal -->
+      <div class="modal-wrap" id="detail-modal">
+        <div class="modal-box" style="max-width:600px;">
+          <div class="modal-header">
+            <span class="modal-title" id="detail-title">Merchant detail</span>
+            <button class="modal-close" onclick="closeDetail()">×</button>
+          </div>
+          <div id="detail-body">Loading…</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  document.getElementById('admin-name').textContent = auth.getUser()?.email || '';
+  document.getElementById('sidebar-overlay').onclick = closeSidebar;
+
+  const PER = 25;
+  let offset = 0, total = 0, debTimer = null;
+
+  function shortKey(k) { return k ? k.slice(0,6)+'…'+k.slice(-4) : '—'; }
+  function fmtA(v)     { return v!=null ? Number(v).toFixed(4)+' AUDD' : '—'; }
+
+  function debounceLoad() {
+    clearTimeout(debTimer);
+    debTimer = setTimeout(() => load(true), 400);
+  }
+
+  async function load(reset = false) {
+    if (reset) offset = 0;
+    const search = document.getElementById('f-search').value.trim();
+    const status = document.getElementById('f-status').value;
+    const tbody  = document.getElementById('m-tbody');
+
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;"><div class="spinner" style="margin:auto;"></div></td></tr>`;
+
+    try {
+      const params = { limit: PER, offset };
+      if (search) params.search = search;
+      if (status) params.status = status;
+
+      const { merchants, total: t } = await api.admin.merchants(params);
+      total = t;
+
+      document.getElementById('total-label').textContent = `${total} total`;
+
+      if (!merchants.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-hint);">No merchants found</td></tr>`;
+        updatePagination(0); return;
+      }
+
+      tbody.innerHTML = merchants.map(m => `<tr>
+        <td>
+          <div style="font-weight:500;">${m.name || m.merchant_id}</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">${m.merchant_id}</div>
+        </td>
+        <td style="font-size:12px;color:var(--text-muted);">${m.users?.email || '—'}</td>
+        <td>
+          <span style="font-family:var(--font-mono);font-size:11px;cursor:pointer;color:var(--brand);"
+                onclick="navigator.clipboard.writeText('${m.wallet_address||''}').then(()=>toast.success('Copied!'))"
+                title="${m.wallet_address}">
+            ${shortKey(m.wallet_address)}
+          </span>
+        </td>
+        <td><span class="badge ${m.is_active?'badge-success':'badge-error'}">${m.is_active?'Active':'Inactive'}</span></td>
+        <td style="font-size:12px;color:var(--text-muted);">${m.registered_at ? new Date(m.registered_at).toLocaleDateString() : '—'}</td>
+        <td style="font-size:13px;color:var(--teal);font-weight:600;">${fmtA(m.escrows?.[0]?.pending_balance)}</td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="viewDetail('${m.merchant_id}','${m.name||m.merchant_id}')">View</button>
+            ${m.is_active
+              ? `<button class="btn btn-danger btn-sm" onclick="deactivate('${m.merchant_id}','${m.name||m.merchant_id}')">Deactivate</button>`
+              : `<button class="btn btn-secondary btn-sm" onclick="reactivate('${m.merchant_id}')">Reactivate</button>`
+            }
+          </div>
+        </td>
+      </tr>`).join('');
+
+      updatePagination(merchants.length);
+    } catch(err) { toast.error(err.message); }
+  }
+
+  function updatePagination(count) {
+    document.getElementById('page-info').textContent =
+      total ? `Showing ${offset+1}–${Math.min(offset+count, total)} of ${total}` : '';
+    document.getElementById('btn-prev').disabled = offset === 0;
+    document.getElementById('btn-next').disabled = offset + PER >= total;
+  }
+
+  function changePage(dir) { offset = Math.max(0, offset + dir * PER); load(); }
+
+  async function deactivate(id, name) {
+    const reason = prompt(`Reason for deactivating "${name}"? (optional)`);
+    if (reason === null) return; // cancelled
+
+    try {
+      const r = await api.admin.deactivate(id, reason);
+      toast.success('Merchant deactivated on-chain');
+      load();
+    } catch(err) { toast.error(err.message); }
+  }
+
+  async function reactivate(id) {
+    if (!confirm(`Reactivate this merchant in DB? Note: the contract still has them deactivated on-chain.`)) return;
+    try {
+      await api.admin.reactivate(id);
+      toast.success('Reactivated in DB');
+      load();
+    } catch(err) { toast.error(err.message); }
+  }
+
+  async function viewDetail(id, name) {
+    document.getElementById('detail-title').textContent = name;
+    document.getElementById('detail-body').innerHTML =
+      '<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:auto;"></div></div>';
+    document.getElementById('detail-modal').classList.add('show');
+
+    try {
+      const { merchant, sessions, releases, stats } = await api.admin.merchant(id);
+      document.getElementById('detail-body').innerHTML = `
+        <div class="info-grid" style="margin-bottom:16px;">
+          <span class="info-label">Merchant ID</span><span style="font-family:var(--font-mono);font-size:12px;">${merchant.merchant_id}</span>
+          <span class="info-label">User email</span><span style="font-size:13px;">${merchant.users?.email||'—'}</span>
+          <span class="info-label">Wallet</span><span style="font-family:var(--font-mono);font-size:11px;">${merchant.wallet_address||'—'}</span>
+          <span class="info-label">Vault</span><span style="font-family:var(--font-mono);font-size:11px;">${merchant.vault_address||'—'}</span>
+          <span class="info-label">Status</span><span><span class="badge ${merchant.is_active?'badge-success':'badge-error'}">${merchant.is_active?'Active':'Inactive'}</span></span>
+          <span class="info-label">Registered</span><span style="font-size:13px;">${merchant.registered_at?new Date(merchant.registered_at).toLocaleString():'—'}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+          <div class="card" style="margin:0;padding:12px;">
+            <div class="card-title">Total deposited</div>
+            <div style="font-size:18px;font-weight:700;">${stats.total_deposited.toFixed(4)} AUDD</div>
+          </div>
+          <div class="card" style="margin:0;padding:12px;">
+            <div class="card-title">Payments</div>
+            <div style="font-size:18px;font-weight:700;">${stats.deposit_count}</div>
+          </div>
+          <div class="card" style="margin:0;padding:12px;">
+            <div class="card-title">Total released</div>
+            <div style="font-size:18px;font-weight:700;">${stats.total_released.toFixed(4)} AUDD</div>
+          </div>
+          <div class="card" style="margin:0;padding:12px;">
+            <div class="card-title">Fees paid</div>
+            <div style="font-size:18px;font-weight:700;">${stats.total_fees_paid.toFixed(4)} AUDD</div>
+          </div>
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Recent sessions (${sessions.length})</div>
+        ${sessions.length ? `<div class="table-wrap"><table>
+          <thead><tr><th>Amount</th><th>Status</th><th>Created</th></tr></thead>
+          <tbody>${sessions.map(s=>`<tr>
+            <td>${s.amount!=null?Number(s.amount).toFixed(2)+' AUDD':'Open'}</td>
+            <td><span class="badge ${s.status==='confirmed'?'badge-success':s.status==='pending'?'badge-pending':'badge-error'}">${s.status}</span></td>
+            <td style="font-size:12px;color:var(--text-muted);">${new Date(s.created_at).toLocaleString()}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : '<div style="color:var(--text-hint);font-size:13px;padding:8px 0;">No sessions yet</div>'}
+      `;
+    } catch(err) {
+      document.getElementById('detail-body').innerHTML =
+        `<div class="alert alert-error">${err.message}</div>`;
+    }
+  }
+
+  function closeDetail() { document.getElementById('detail-modal').classList.remove('show'); }
+
+  load();
+</script>
+</body>
+</html>

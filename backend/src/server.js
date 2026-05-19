@@ -5,8 +5,9 @@ const helmet    = require('helmet');
 const morgan    = require('morgan');
 const path      = require('path');
 
-const authMiddleware = require('./middleware/auth');
-const { startCron }  = require('./cron/dailyRelease');
+const authMiddleware              = require('./middleware/auth');
+const { adminMiddleware }         = require('./middleware/admin');
+const { startCron }               = require('./cron/dailyRelease');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -21,25 +22,27 @@ app.use(morgan('dev'));
 app.use(express.static(path.join(__dirname, '../../frontend')));
 
 // ── Public routes ──────────────────────────────────────────
-app.use('/api/health',  require('./routes/health'));
-app.use('/api/auth',    require('./routes/auth'));
-app.use('/api/public',  require('./routes/public'));
-app.use('/api/pay',     require('./routes/pay'));
+app.use('/api/health', require('./routes/health'));
+app.use('/api/auth',   require('./routes/auth'));
+app.use('/api/public', require('./routes/public'));
+app.use('/api/pay',    require('./routes/pay'));
 
-// ── Reusable link redirect ─────────────────────────────────
-// /pay/:slug → serves the checkout page
-// Frontend JS calls /api/public/link/:slug to get/create session
-app.get('/pay/:slug', (req, res) => {
-  res.sendFile(path.join(__dirname, '../../frontend', 'pages', 'pay-link.html'));
-});
+// Reusable link page
+app.get('/pay/:slug', (req, res) =>
+  res.sendFile(path.join(__dirname, '../../frontend', 'pages', 'pay-link.html'))
+);
 
-// ── Protected routes ───────────────────────────────────────
+// ── Merchant protected routes ──────────────────────────────
 app.use('/api/merchants', authMiddleware, require('./routes/merchants'));
 app.use('/api/payments',  authMiddleware, require('./routes/payments'));
 app.use('/api/release',   authMiddleware, require('./routes/release'));
 app.use('/api/webhooks',  authMiddleware, require('./routes/webhooks'));
 app.use('/api/apikeys',   authMiddleware, require('./routes/apikeys'));
 app.use('/api/links',     authMiddleware, require('./routes/paymentLinks'));
+//app.use('/api/branding',  authMiddleware, require('./routes/branding'));
+
+// ── Admin routes — auth + admin check ─────────────────────
+app.use('/api/admin', authMiddleware, adminMiddleware, require('./routes/admin'));
 
 // Catch-all → frontend
 app.get('*', (req, res) =>
@@ -53,7 +56,6 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`\n[SETTL] ▶  http://localhost:${PORT}`);
-  console.log(`[SETTL] Trust proxy: enabled`);
   startCron();
 });
 module.exports = app;

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL — Admin</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    .admin-nav { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px; }
+    .admin-nav a { font-size:13px; font-weight:500; padding:6px 14px; border-radius:20px; border:1px solid var(--border); color:var(--text-muted); text-decoration:none; transition:background .15s,color .15s; }
+    .admin-nav a:hover, .admin-nav a.active { background:var(--brand); color:#fff; border-color:var(--brand); text-decoration:none; }
+    .section { display:none; }
+    .section.active { display:block; }
+    .stat-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:20px; }
+    .stat-box { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 16px; }
+    .stat-box-label { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+    .stat-box-value { font-size:24px; font-weight:700; color:var(--text-primary); }
+    .stat-box-sub { font-size:12px; color:var(--text-muted); margin-top:2px; }
+    .chart-bar-wrap { display:flex; align-items:flex-end; gap:3px; height:120px; margin:16px 0 6px; }
+    .chart-bar { flex:1; background:var(--brand); border-radius:3px 3px 0 0; min-height:2px; position:relative; transition:opacity .15s; cursor:pointer; }
+    .chart-bar:hover { opacity:.75; }
+    .chart-bar-tooltip { display:none; position:absolute; bottom:calc(100%+4px); left:50%; transform:translateX(-50%); background:#1E1E2E; color:#fff; font-size:10px; padding:3px 7px; border-radius:4px; white-space:nowrap; z-index:10; }
+    .chart-bar:hover .chart-bar-tooltip { display:block; }
+    .chart-label { font-size:10px; color:var(--text-hint); text-align:center; margin-top:4px; }
+    .admin-badge { display:inline-flex; align-items:center; gap:4px; background:#FEF3C7; border:1px solid #FCD34D; color:#78350F; border-radius:20px; padding:2px 10px; font-size:12px; font-weight:600; margin-left:8px; }
+  </style>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <!-- Minimal sidebar for admin -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      SETTL <span class="admin-badge">⚡ Admin</span>
+    </div>
+    <div class="sidebar-section">Platform</div>
+    <a href="/pages/admin/index.html"     class="nav-item active"><span class="nav-icon">◈</span>Overview</a>
+    <a href="/pages/admin/merchants.html" class="nav-item"><span class="nav-icon">⊞</span>Merchants</a>
+    <a href="/pages/admin/analytics.html" class="nav-item"><span class="nav-icon">↗</span>Analytics</a>
+    <a href="/pages/admin/releases.html"  class="nav-item"><span class="nav-icon">↑</span>Releases</a>
+    <a href="/pages/admin/settings.html"  class="nav-item"><span class="nav-icon">⚙</span>Settings</a>
+    <div class="sidebar-section">Merchant view</div>
+    <a href="/pages/dashboard.html"       class="nav-item"><span class="nav-icon">←</span>My dashboard</a>
+    <div class="sidebar-footer">
+      <div class="sidebar-user-name" id="admin-name"></div>
+      <div class="sidebar-user-email" id="admin-email"></div>
+      <br/>
+      <a href="#" onclick="handleLogout()" style="font-size:12px;color:var(--text-hint);">Sign out</a>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Platform overview</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="load()">Refresh</button>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Stats -->
+      <div class="stat-row" id="stats-row">
+        <div class="stat-box"><div class="stat-box-label">Total merchants</div><div class="stat-box-value" id="s-merchants">—</div><div class="stat-box-sub" id="s-active-merchants">— active</div></div>
+        <div class="stat-box"><div class="stat-box-label">Total users</div><div class="stat-box-value" id="s-users">—</div><div class="stat-box-sub">signed up</div></div>
+        <div class="stat-box"><div class="stat-box-label">Total volume</div><div class="stat-box-value" id="s-volume">—</div><div class="stat-box-sub">AUDD processed</div></div>
+        <div class="stat-box"><div class="stat-box-label">Fees collected</div><div class="stat-box-value" id="s-fees">—</div><div class="stat-box-sub">AUDD (1.5%)</div></div>
+        <div class="stat-box"><div class="stat-box-label">Payments</div><div class="stat-box-value" id="s-payments">—</div><div class="stat-box-sub" id="s-conversion">—% conversion</div></div>
+        <div class="stat-box"><div class="stat-box-label">Sessions</div><div class="stat-box-value" id="s-sessions">—</div><div class="stat-box-sub">total created</div></div>
+      </div>
+
+      <!-- Volume chart -->
+      <div class="card">
+        <div class="card-title-row">
+          <h2>AUDD volume — last 30 days</h2>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <span style="font-size:12px;color:var(--text-muted);">Total: <strong id="chart-total">—</strong> AUDD</span>
+          </div>
+        </div>
+        <div class="chart-bar-wrap" id="chart-bars">
+          <div style="color:var(--text-hint);font-size:13px;margin:auto;">Loading chart…</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-hint);">
+          <span id="chart-start"></span>
+          <span id="chart-end"></span>
+        </div>
+      </div>
+
+      <!-- Recent payments -->
+      <div class="card">
+        <div class="card-title-row"><h2>Recent confirmed payments</h2><a href="/pages/admin/merchants.html" class="btn btn-secondary btn-sm">All merchants</a></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Merchant</th><th>Amount</th><th>Confirmed</th><th>Tx</th></tr></thead>
+            <tbody id="recent-tbody">
+              <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  const user = auth.getUser();
+  document.getElementById('admin-name').textContent  = user?.full_name || user?.email || '';
+  document.getElementById('admin-email').textContent = user?.email || '';
+  document.getElementById('sidebar-overlay').onclick = closeSidebar;
+
+  const EX = 'https://explorer.solana.com/tx/', CL = '?cluster=devnet';
+  function fmtA(v) { return v!=null ? Number(v).toFixed(2)+' AUDD' : '—'; }
+  function shortKey(k) { return k ? k.slice(0,6)+'…'+k.slice(-4) : '—'; }
+
+  async function load() {
+    try {
+      const [overview, volume] = await Promise.all([
+        api.admin.overview(),
+        api.admin.analytics.volume(30),
+      ]);
+
+      // Stats
+      document.getElementById('s-merchants').textContent        = overview.merchants.total;
+      document.getElementById('s-active-merchants').textContent = `${overview.merchants.active} active`;
+      document.getElementById('s-users').textContent            = overview.users.total;
+      document.getElementById('s-volume').textContent           = overview.financials.total_volume_audd.toFixed(2);
+      document.getElementById('s-fees').textContent             = overview.financials.total_fees_audd.toFixed(4);
+      document.getElementById('s-payments').textContent         = overview.payments.confirmed_sessions;
+      document.getElementById('s-sessions').textContent         = overview.payments.total_sessions;
+      document.getElementById('s-conversion').textContent       = `${overview.payments.conversion_rate}% conversion`;
+
+      // Recent payments table
+      const tbody = document.getElementById('recent-tbody');
+      const recent = overview.recent_payments || [];
+      tbody.innerHTML = recent.length ? recent.map(s => `<tr>
+        <td>${s.merchants?.name || s.merchant_id || '—'}</td>
+        <td style="font-weight:600;">${fmtA(s.amount_received || s.amount)}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${s.confirmed_at ? new Date(s.confirmed_at).toLocaleString() : '—'}</td>
+        <td>${s.tx_signature ? `<a href="${EX}${s.tx_signature}${CL}" target="_blank" style="font-size:11px;font-family:var(--font-mono);">${shortKey(s.tx_signature)}</a>` : '—'}</td>
+      </tr>`).join('') : `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-hint);">No confirmed payments yet</td></tr>`;
+
+      // Volume chart
+      const days = volume.days || [];
+      const maxVol = Math.max(...days.map(d => d.deposits), 1);
+      document.getElementById('chart-total').textContent = days.reduce((s,d) => s+d.deposits, 0).toFixed(2);
+      document.getElementById('chart-start').textContent = days[0]?.date || '';
+      document.getElementById('chart-end').textContent   = days[days.length-1]?.date || '';
+
+      const barsEl = document.getElementById('chart-bars');
+      barsEl.innerHTML = days.map(d => {
+        const h = Math.max(2, Math.round((d.deposits / maxVol) * 110));
+        return `<div class="chart-bar" style="height:${h}px;" title="${d.date}: ${d.deposits.toFixed(4)} AUDD">
+          <div class="chart-bar-tooltip">${d.date}<br/>${d.deposits.toFixed(4)} AUDD</div>
+        </div>`;
+      }).join('');
+
+    } catch(err) {
+      if (err.status === 403) {
+        toast.error('Admin access required. Ask the platform owner to set your account as admin.');
+      } else {
+        toast.error('Failed to load: ' + err.message);
+      }
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

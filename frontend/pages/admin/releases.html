@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL Admin — Releases</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    .admin-badge{display:inline-flex;align-items:center;gap:4px;background:#FEF3C7;border:1px solid #FCD34D;color:#78350F;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;margin-left:8px;}
+  </style>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">SETTL <span class="admin-badge">⚡ Admin</span></div>
+    <div class="sidebar-section">Platform</div>
+    <a href="/pages/admin/index.html"     class="nav-item"><span class="nav-icon">◈</span>Overview</a>
+    <a href="/pages/admin/merchants.html" class="nav-item"><span class="nav-icon">⊞</span>Merchants</a>
+    <a href="/pages/admin/analytics.html" class="nav-item"><span class="nav-icon">↗</span>Analytics</a>
+    <a href="/pages/admin/releases.html"  class="nav-item active"><span class="nav-icon">↑</span>Releases</a>
+    <a href="/pages/admin/settings.html"  class="nav-item"><span class="nav-icon">⚙</span>Settings</a>
+    <div class="sidebar-section">Merchant view</div>
+    <a href="/pages/dashboard.html"       class="nav-item"><span class="nav-icon">←</span>My dashboard</a>
+    <div class="sidebar-footer">
+      <a href="#" onclick="handleLogout()" style="font-size:12px;color:var(--text-hint);">Sign out</a>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Release logs</span>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary btn-sm" onclick="load()">Refresh</button>
+        <button class="btn btn-primary btn-sm"   onclick="triggerRelease()">▶ Release all now</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Cron log -->
+      <div class="card" style="margin-bottom:14px;">
+        <div class="card-title-row"><h2>Cron run history</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Started</th><th>Triggered by</th><th>Status</th><th>Released</th><th>Skipped</th><th>Failed</th><th>Summary</th></tr></thead>
+            <tbody id="cron-tbody">
+              <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Release logs -->
+      <div class="card">
+        <div class="card-title-row"><h2>All release transactions</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Merchant</th><th>Gross</th><th>Fee</th><th>Net</th><th>Status</th><th>Date</th><th>Tx</th></tr></thead>
+            <tbody id="rel-tbody">
+              <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  document.getElementById('sidebar-overlay').onclick = closeSidebar;
+
+  const EX='https://explorer.solana.com/tx/', CL='?cluster=devnet';
+  function fmtA(v) { return v!=null?Number(v).toFixed(4)+' AUDD':'—'; }
+  function shortKey(k) { return k?k.slice(0,6)+'…'+k.slice(-4):'—'; }
+
+  async function load() {
+    try {
+      const [{ logs: cronLogs }, { releases }] = await Promise.all([
+        api.admin.cronLogs(),
+        api.admin.releases(),
+      ]);
+
+      document.getElementById('cron-tbody').innerHTML = cronLogs.length
+        ? cronLogs.map(l=>`<tr>
+            <td style="font-size:12px;">${new Date(l.started_at).toLocaleString()}</td>
+            <td><span class="badge ${l.triggered_by==='cron'?'badge-info':'badge-pending'}">${l.triggered_by}</span></td>
+            <td><span class="badge ${l.status==='success'?'badge-success':l.status==='failed'?'badge-error':l.status==='running'?'badge-pending':'badge-info'}">${l.status}</span></td>
+            <td style="color:var(--teal);font-weight:600;">${l.released??'—'}</td>
+            <td style="color:var(--text-muted);">${l.skipped??'—'}</td>
+            <td style="color:${l.failed>0?'var(--coral)':'var(--text-muted)'};">${l.failed??'—'}</td>
+            <td style="font-size:12px;color:var(--text-muted);">${l.summary||'—'}</td>
+          </tr>`).join('')
+        : `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-hint);">No cron runs yet</td></tr>`;
+
+      document.getElementById('rel-tbody').innerHTML = releases.length
+        ? releases.map(r=>`<tr>
+            <td>${r.merchants?.name||r.merchant_id||'—'}</td>
+            <td>${fmtA(r.gross)}</td>
+            <td style="color:var(--text-muted);">${fmtA(r.fee)}</td>
+            <td style="font-weight:600;color:var(--teal);">${fmtA(r.net)}</td>
+            <td><span class="badge ${r.status==='success'?'badge-success':'badge-error'}">${r.status}</span></td>
+            <td style="font-size:12px;color:var(--text-muted);">${new Date(r.released_at).toLocaleString()}</td>
+            <td>${r.tx_signature?`<a href="${EX}${r.tx_signature}${CL}" target="_blank" style="font-family:var(--font-mono);font-size:11px;">${shortKey(r.tx_signature)}</a>`:'—'}</td>
+          </tr>`).join('')
+        : `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-hint);">No releases yet</td></tr>`;
+
+    } catch(err) { toast.error(err.message); }
+  }
+
+  async function triggerRelease() {
+    if (!confirm('Trigger immediate release for ALL active merchants?')) return;
+    try {
+      toast.info('Sending release instructions…');
+      const r = await api.post('/release/all', {});
+      toast.success(`Done — ${r.released} released, ${r.skipped} skipped, ${r.failed} failed`);
+      load();
+    } catch(err) { toast.error(err.message); }
+  }
+
+  load();
+</script>
+</body>
+</html>

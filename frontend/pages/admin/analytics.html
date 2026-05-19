@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL Admin — Analytics</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    .admin-badge{display:inline-flex;align-items:center;gap:4px;background:#FEF3C7;border:1px solid #FCD34D;color:#78350F;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;margin-left:8px;}
+    .chart-bar-wrap{display:flex;align-items:flex-end;gap:2px;height:140px;margin:12px 0 4px;}
+    .chart-bar{flex:1;background:var(--brand);border-radius:3px 3px 0 0;min-height:2px;position:relative;cursor:pointer;transition:opacity .15s;}
+    .chart-bar:hover{opacity:.7;}
+    .chart-bar-tooltip{display:none;position:absolute;bottom:calc(100%+4px);left:50%;transform:translateX(-50%);background:#1E1E2E;color:#fff;font-size:10px;padding:3px 7px;border-radius:4px;white-space:nowrap;z-index:10;}
+    .chart-bar:hover .chart-bar-tooltip{display:block;}
+    .period-btn{padding:4px 12px;border-radius:14px;border:1px solid var(--border);background:transparent;font-size:12px;cursor:pointer;color:var(--text-muted);}
+    .period-btn.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+  </style>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">SETTL <span class="admin-badge">⚡ Admin</span></div>
+    <div class="sidebar-section">Platform</div>
+    <a href="/pages/admin/index.html"     class="nav-item"><span class="nav-icon">◈</span>Overview</a>
+    <a href="/pages/admin/merchants.html" class="nav-item"><span class="nav-icon">⊞</span>Merchants</a>
+    <a href="/pages/admin/analytics.html" class="nav-item active"><span class="nav-icon">↗</span>Analytics</a>
+    <a href="/pages/admin/releases.html"  class="nav-item"><span class="nav-icon">↑</span>Releases</a>
+    <a href="/pages/admin/settings.html"  class="nav-item"><span class="nav-icon">⚙</span>Settings</a>
+    <div class="sidebar-section">Merchant view</div>
+    <a href="/pages/dashboard.html"       class="nav-item"><span class="nav-icon">←</span>My dashboard</a>
+    <div class="sidebar-footer">
+      <a href="#" onclick="handleLogout()" style="font-size:12px;color:var(--text-hint);">Sign out</a>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Analytics</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Volume chart -->
+      <div class="card">
+        <div class="card-title-row">
+          <h2>AUDD volume</h2>
+          <div style="display:flex;gap:6px;">
+            <button class="period-btn active" onclick="setPeriod(7,this)">7d</button>
+            <button class="period-btn"        onclick="setPeriod(30,this)">30d</button>
+            <button class="period-btn"        onclick="setPeriod(90,this)">90d</button>
+          </div>
+        </div>
+        <div style="font-size:22px;font-weight:700;margin-bottom:4px;" id="vol-total">—</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;" id="vol-sub">AUDD in selected period</div>
+        <div class="chart-bar-wrap" id="vol-chart">
+          <div style="color:var(--text-hint);font-size:13px;margin:auto;">Loading…</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-hint);">
+          <span id="vol-start"></span><span id="vol-end"></span>
+        </div>
+      </div>
+
+      <!-- Conversion + top merchants -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;" class="card-grid" style="display:grid;">
+
+        <!-- Conversion -->
+        <div class="card" style="margin:0;">
+          <div class="card-title-row"><h2>Conversion</h2></div>
+          <div style="text-align:center;padding:16px 0;">
+            <div style="font-size:48px;font-weight:800;color:var(--brand);" id="conv-rate">—</div>
+            <div style="font-size:14px;color:var(--text-muted);">% of sessions confirmed</div>
+          </div>
+          <div class="info-grid" id="conv-details">
+            <span class="info-label">Total sessions</span><span id="cv-total">—</span>
+            <span class="info-label">Confirmed</span><span id="cv-conf" style="color:var(--teal);font-weight:600;">—</span>
+            <span class="info-label">Expired</span><span id="cv-exp" style="color:var(--text-muted);">—</span>
+            <span class="info-label">Pending</span><span id="cv-pend" style="color:var(--amber);">—</span>
+          </div>
+        </div>
+
+        <!-- Top merchants -->
+        <div class="card" style="margin:0;">
+          <div class="card-title-row"><h2>Top merchants</h2></div>
+          <div id="top-merchants">
+            <div style="color:var(--text-hint);font-size:13px;padding:16px 0;text-align:center;">Loading…</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  document.getElementById('sidebar-overlay').onclick = closeSidebar;
+
+  let currentPeriod = 7;
+
+  function setPeriod(days, btn) {
+    currentPeriod = days;
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadVolume();
+  }
+
+  async function loadVolume() {
+    try {
+      const { days } = await api.admin.analytics.volume(currentPeriod);
+      const total = days.reduce((s,d) => s+d.deposits, 0);
+      const maxV  = Math.max(...days.map(d => d.deposits), 1);
+
+      document.getElementById('vol-total').textContent = total.toFixed(4) + ' AUDD';
+      document.getElementById('vol-sub').textContent   = `AUDD in last ${currentPeriod} days`;
+      document.getElementById('vol-start').textContent = days[0]?.date || '';
+      document.getElementById('vol-end').textContent   = days[days.length-1]?.date || '';
+
+      document.getElementById('vol-chart').innerHTML = days.map(d => {
+        const h = Math.max(2, Math.round((d.deposits / maxV) * 130));
+        return `<div class="chart-bar" style="height:${h}px;">
+          <div class="chart-bar-tooltip">${d.date}<br/>${d.deposits.toFixed(4)} AUDD</div>
+        </div>`;
+      }).join('');
+    } catch(err) { toast.error(err.message); }
+  }
+
+  async function loadConversion() {
+    try {
+      const { overall } = await api.admin.analytics.conversion();
+      document.getElementById('conv-rate').textContent  = overall.conversion_rate + '%';
+      document.getElementById('cv-total').textContent   = overall.total;
+      document.getElementById('cv-conf').textContent    = overall.confirmed;
+      document.getElementById('cv-exp').textContent     = overall.expired;
+      document.getElementById('cv-pend').textContent    = overall.pending;
+    } catch(err) { toast.error(err.message); }
+  }
+
+  async function loadTopMerchants() {
+    try {
+      const { merchants } = await api.admin.analytics.topMerchants(5);
+      const el = document.getElementById('top-merchants');
+      if (!merchants.length) { el.innerHTML = '<div style="color:var(--text-hint);font-size:13px;padding:8px 0;">No data yet</div>'; return; }
+      el.innerHTML = merchants.map((m,i) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);${i===merchants.length-1?'border-bottom:none;':''}">
+          <div>
+            <div style="font-size:13px;font-weight:500;">${m.name||m.merchant_id}</div>
+            <div style="font-size:11px;color:var(--text-muted);">${m.payment_count} payments</div>
+          </div>
+          <div style="font-weight:600;color:var(--teal);font-size:13px;">${m.total_volume.toFixed(2)} AUDD</div>
+        </div>`).join('');
+    } catch(err) { toast.error(err.message); }
+  }
+
+  loadVolume();
+  loadConversion();
+  loadTopMerchants();
+</script>
+</body>
+</html>

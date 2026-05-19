@@ -87,3 +87,26 @@ const api = {
 };
 
 window.api = api;
+
+// Admin API — added by Phase 6
+window.api.admin = {
+  overview:    ()          => api.get('/admin/overview'),
+  merchants:   (p)         => api.get('/admin/merchants?' + new URLSearchParams(p||{})),
+  merchant:    (id)        => api.get(`/admin/merchants/${id}`),
+  deactivate:  (id, reason)=> api.post(`/admin/merchants/${id}/deactivate`, { reason }),
+  reactivate:  (id)        => api.post(`/admin/merchants/${id}/reactivate`, {}),
+  fee:         {
+    get:  ()              => api.get('/admin/fee'),
+    set:  (bps)           => api.post('/admin/fee', { fee_basis_points: bps }),
+  },
+  treasury:    (wallet)    => api.post('/admin/treasury', { new_treasury_wallet: wallet }),
+  analytics:   {
+    volume:      (days)   => api.get(`/admin/analytics/volume?days=${days||30}`),
+    topMerchants:(limit)  => api.get(`/admin/analytics/top-merchants?limit=${limit||10}`),
+    conversion:  ()       => api.get('/admin/analytics/conversion'),
+  },
+  releases:    (p)         => api.get('/admin/releases?' + new URLSearchParams(p||{})),
+  cronLogs:    ()          => api.get('/admin/cron-logs'),
+  users:       (p)         => api.get('/admin/users?' + new URLSearchParams(p||{})),
+  logs:        ()          => api.get('/admin/logs'),
+};

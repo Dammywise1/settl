@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SETTL Admin — Settings</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    .admin-badge{display:inline-flex;align-items:center;gap:4px;background:#FEF3C7;border:1px solid #FCD34D;color:#78350F;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;margin-left:8px;}
+  </style>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">SETTL <span class="admin-badge">⚡ Admin</span></div>
+    <div class="sidebar-section">Platform</div>
+    <a href="/pages/admin/index.html"     class="nav-item"><span class="nav-icon">◈</span>Overview</a>
+    <a href="/pages/admin/merchants.html" class="nav-item"><span class="nav-icon">⊞</span>Merchants</a>
+    <a href="/pages/admin/analytics.html" class="nav-item"><span class="nav-icon">↗</span>Analytics</a>
+    <a href="/pages/admin/releases.html"  class="nav-item"><span class="nav-icon">↑</span>Releases</a>
+    <a href="/pages/admin/settings.html"  class="nav-item active"><span class="nav-icon">⚙</span>Settings</a>
+    <div class="sidebar-section">Merchant view</div>
+    <a href="/pages/dashboard.html"       class="nav-item"><span class="nav-icon">←</span>My dashboard</a>
+    <div class="sidebar-footer">
+      <a href="#" onclick="handleLogout()" style="font-size:12px;color:var(--text-hint);">Sign out</a>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <span class="topbar-title">Platform settings</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Current config -->
+      <div class="card" style="max-width:540px;">
+        <div class="card-title-row"><h2>Current on-chain config</h2><button class="btn btn-secondary btn-sm" onclick="loadConfig()">Refresh</button></div>
+        <div class="info-grid" id="config-info">
+          <span class="info-label">Loading…</span><span></span>
+        </div>
+      </div>
+
+      <!-- Fee management -->
+      <div class="card" style="max-width:540px;">
+        <div class="card-title-row"><h2>Platform fee</h2></div>
+        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;">
+          Change the fee charged on every release. Currently <strong id="current-fee-label">1.5%</strong>.
+          Maximum is 10% (1000 basis points). Changes take effect immediately on-chain.
+        </p>
+        <div class="form-group">
+          <label class="form-label">New fee (%)</label>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <input class="form-input" id="fee-pct" type="number" min="0" max="10" step="0.01"
+                   placeholder="e.g. 1.5" style="flex:1;font-size:18px;font-weight:600;"/>
+            <span style="font-size:14px;color:var(--text-muted);">%</span>
+          </div>
+          <div class="form-hint">
+            Enter as a percentage (e.g. 1.5 = 1.5%). Converts to basis points automatically.
+          </div>
+        </div>
+        <div class="alert alert-warning" style="margin-bottom:12px;">
+          This calls the on-chain <code>update_fee</code> instruction. The change applies to all future releases immediately.
+        </div>
+        <div id="fee-ok"  class="alert alert-success" style="display:none;"></div>
+        <div id="fee-err" class="alert alert-error"   style="display:none;"></div>
+        <button class="btn btn-primary" onclick="updateFee()">Update fee on-chain</button>
+      </div>
+
+      <!-- Treasury management -->
+      <div class="card" style="max-width:540px;">
+        <div class="card-title-row"><h2>Treasury wallet</h2></div>
+        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;">
+          Change the wallet that receives the platform fee on every release.
+          The new wallet must have an AUDD token account (ATA) already created.
+        </p>
+        <div class="form-group">
+          <label class="form-label">New treasury wallet (Solana public key)</label>
+          <input class="form-input" id="treasury-wallet"
+                 placeholder="Base58 public key"
+                 autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+                 style="font-family:var(--font-mono);font-size:13px;"/>
+        </div>
+        <div class="alert alert-warning" style="margin-bottom:12px;">
+          This calls the on-chain <code>update_treasury</code> instruction. Make sure the new wallet has an AUDD ATA before changing.
+        </div>
+        <div id="treas-ok"  class="alert alert-success" style="display:none;"></div>
+        <div id="treas-err" class="alert alert-error"   style="display:none;"></div>
+        <button class="btn btn-primary" onclick="updateTreasury()">Update treasury on-chain</button>
+      </div>
+
+      <!-- Admin audit log -->
+      <div class="card" style="max-width:540px;">
+        <div class="card-title-row"><h2>Admin action log</h2><button class="btn btn-secondary btn-sm" onclick="loadLogs()">Refresh</button></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Action</th><th>Target</th><th>Time</th></tr></thead>
+            <tbody id="log-tbody">
+              <tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text-hint);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/modules/api.js"></script>
+<script src="/js/modules/auth.js"></script>
+<script src="/js/modules/toast.js"></script>
+<script src="/js/modules/nav.js"></script>
+<script>
+  if (!auth.requireAuth()) throw 0;
+  document.getElementById('sidebar-overlay').onclick = closeSidebar;
+
+  function shortKey(k) { return k ? k.slice(0,10)+'…'+k.slice(-6) : '—'; }
+
+  async function loadConfig() {
+    try {
+      const config = await api.admin.fee.get();
+      document.getElementById('current-fee-label').textContent = config.fee_percent + '%';
+      document.getElementById('fee-pct').value = config.fee_percent;
+      document.getElementById('config-info').innerHTML = `
+        <span class="info-label">Fee</span>
+        <span style="font-weight:600;font-size:16px;color:var(--brand);">${config.fee_percent}% (${config.fee_basis_points} bps)</span>
+        <span class="info-label">Treasury</span>
+        <span style="font-family:var(--font-mono);font-size:12px;cursor:pointer;color:var(--brand);"
+              onclick="navigator.clipboard.writeText('${config.treasury_wallet||''}').then(()=>toast.success('Copied!'))"
+              title="${config.treasury_wallet}">
+          ${shortKey(config.treasury_wallet)}
+        </span>
+        <span class="info-label">Fees collected</span>
+        <span style="font-weight:600;">${Number(config.total_fees_collected||0).toFixed(4)} AUDD</span>
+        <span class="info-label">Authority</span>
+        <span style="font-family:var(--font-mono);font-size:12px;">${shortKey(config.authority)}</span>
+      `;
+    } catch(err) {
+      document.getElementById('config-info').innerHTML =
+        `<span style="color:var(--coral);font-size:13px;">${err.message}</span><span></span>`;
+    }
+  }
+
+  async function updateFee() {
+    document.getElementById('fee-ok').style.display  = 'none';
+    document.getElementById('fee-err').style.display = 'none';
+
+    const pct = parseFloat(document.getElementById('fee-pct').value);
+    if (isNaN(pct) || pct < 0 || pct > 10) {
+      document.getElementById('fee-err').textContent = 'Enter a fee between 0% and 10%';
+      document.getElementById('fee-err').style.display = '';
+      return;
+    }
+
+    const bps = Math.round(pct * 100); // 1.5% → 150
+
+    if (!confirm(`Change platform fee to ${pct}% (${bps} basis points)? This updates on-chain immediately.`)) return;
+
+    try {
+      const r = await api.admin.fee.set(bps);
+      document.getElementById('fee-ok').textContent = `Fee updated to ${pct}% on-chain. Tx: ${r.tx?.slice(0,20)}…`;
+      document.getElementById('fee-ok').style.display = '';
+      toast.success(`Fee changed to ${pct}%`);
+      loadConfig();
+    } catch(err) {
+      document.getElementById('fee-err').textContent = err.message;
+      document.getElementById('fee-err').style.display = '';
+    }
+  }
+
+  async function updateTreasury() {
+    document.getElementById('treas-ok').style.display  = 'none';
+    document.getElementById('treas-err').style.display = 'none';
+
+    const wallet = document.getElementById('treasury-wallet').value.trim();
+    if (!wallet) {
+      document.getElementById('treas-err').textContent = 'Enter a wallet address';
+      document.getElementById('treas-err').style.display = '';
+      return;
+    }
+    if (wallet.length < 32 || wallet.length > 44) {
+      document.getElementById('treas-err').textContent = 'Invalid Solana address (must be 32–44 base58 characters)';
+      document.getElementById('treas-err').style.display = '';
+      return;
+    }
+
+    if (!confirm(`Change treasury wallet to ${wallet.slice(0,10)}…? Make sure this wallet has an AUDD token account.`)) return;
+
+    try {
+      const r = await api.admin.treasury(wallet);
+      document.getElementById('treas-ok').textContent = `Treasury updated on-chain. Tx: ${r.tx?.slice(0,20)}…`;
+      document.getElementById('treas-ok').style.display = '';
+      toast.success('Treasury wallet updated');
+      document.getElementById('treasury-wallet').value = '';
+      loadConfig();
+    } catch(err) {
+      document.getElementById('treas-err').textContent = err.message;
+      document.getElementById('treas-err').style.display = '';
+    }
+  }
+
+  async function loadLogs() {
+    try {
+      const { logs } = await api.admin.logs();
+      const tbody = document.getElementById('log-tbody');
+      tbody.innerHTML = logs.length ? logs.map(l => `<tr>
+        <td><span class="badge badge-info" style="font-size:10px;">${l.action}</span></td>
+        <td style="font-size:12px;font-family:var(--font-mono);">${l.target_id||'—'}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${new Date(l.created_at).toLocaleString()}</td>
+      </tr>`).join('') :
+      `<tr><td colspan="3" style="text-align:center;padding:20px;color:var(--text-hint);">No admin actions yet</td></tr>`;
+    } catch(err) { toast.error(err.message); }
+  }
+
+  loadConfig();
+  loadLogs();
+</script>
+</body>
+</html>
