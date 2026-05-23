@@ -1,6 +1,6 @@
 const router     = require('express').Router();
 const { supabase } = require('../config/supabase');
-const { getVaultTokenBalance, getEscrowOnChain } = require('../config/anchor');
+const { getVaultTokenBalance } = require('../config/anchor');
 
 // ── GET /api/merchants/me ─────────────────────────────────
 router.get('/me', async (req, res, next) => {
@@ -18,15 +18,11 @@ router.get('/me', async (req, res, next) => {
     let liveBalance = null;
 
     if (merchant.is_active && merchant.vault_address) {
-      // Read live vault token account balance
-      // This is the real AUDD held in the vault PDA
       const vaultBal = await getVaultTokenBalance(merchant.vault_address);
       liveBalance = vaultBal.uiAmount || 0;
 
-      // If live balance differs from DB, sync it
       const dbBalance = parseFloat(merchant.escrows?.[0]?.pending_balance || 0);
       if (Math.abs(liveBalance - dbBalance) > 0.0001) {
-        // Count confirmed payments
         const { count } = await supabase
           .from('payment_sessions')
           .select('id', { count: 'exact', head: true })
@@ -38,7 +34,6 @@ router.get('/me', async (req, res, next) => {
           .update({ pending_balance: liveBalance, total_payments: count || 0 })
           .eq('merchant_id', merchant.merchant_id);
 
-        // Update the escrow object in memory for the response
         if (merchant.escrows?.[0]) {
           merchant.escrows[0].pending_balance = liveBalance;
           merchant.escrows[0].total_payments  = count || 0;
@@ -47,12 +42,9 @@ router.get('/me', async (req, res, next) => {
       }
     }
 
-    // No-cache headers so dashboard always gets fresh data
     res.set('Cache-Control', 'no-store');
-
     res.json({
       merchant,
-      // pendingBalance in AUDD — use live if available, fall back to DB
       pendingBalance: liveBalance ?? parseFloat(merchant.escrows?.[0]?.pending_balance || 0),
       totalPayments:  merchant.escrows?.[0]?.total_payments || 0,
       lastReleasedAt: merchant.escrows?.[0]?.last_released_at || null,
@@ -106,9 +98,8 @@ router.get('/me/releases', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-module.exports = router;
-
 // ── GET /api/merchants/me/transactions ────────────────────
+// NOTE: this MUST be before module.exports
 router.get('/me/transactions', async (req, res, next) => {
   try {
     const { data: merchant } = await supabase
@@ -117,8 +108,8 @@ router.get('/me/transactions', async (req, res, next) => {
 
     const limit  = Math.min(parseInt(req.query.limit  || '50'), 100);
     const offset = parseInt(req.query.offset || '0');
-    const type   = req.query.type;   // 'deposit' | 'release' | 'fee'
-    const status = req.query.status; // 'confirmed' | 'pending' | 'failed'
+    const type   = req.query.type;
+    const status = req.query.status;
 
     let query = supabase
       .from('transactions')
@@ -133,38 +124,35 @@ router.get('/me/transactions', async (req, res, next) => {
     const { data, error, count } = await query;
     if (error) throw error;
 
-    res.set('Cache-Control', 'no-store');
-    res.json({ transactions: data || [], total: count || 0, limit, offset });
-  } catch (err) { next(err); }
-});
+    // Enrich deposits with amount_received from payment_sessions
+    // For open payments, transactions.amount = session.amount (null→0)
+    // but amount_received IS stored on the transaction row already.
+    // This handles the display correctly for all cases.
+    const refs = (data || [])
+      .filter(t => t.type === 'deposit' && !t.amount_received && t.reference_key)
+      .map(t => t.reference_key);
 
-// ── GET /api/merchants/me/transactions ────────────────────
-router.get('/me/transactions', async (req, res, next) => {
-  try {
-    const { data: merchant } = await supabase
-      .from('merchants').select('merchant_id').eq('user_id', req.user.id).maybeSingle();
-    if (!merchant) return res.json({ transactions: [], total: 0 });
+    let sessionMap = {};
+    if (refs.length > 0) {
+      const { data: sessions } = await supabase
+        .from('payment_sessions')
+        .select('reference_key, amount_received, amount')
+        .in('reference_key', refs);
 
-    const limit  = Math.min(parseInt(req.query.limit  || '50'), 100);
-    const offset = parseInt(req.query.offset || '0');
-    const type   = req.query.type;   // 'deposit' | 'release' | 'fee'
-    const status = req.query.status; // 'confirmed' | 'pending' | 'failed'
+      (sessions || []).forEach(s => {
+        sessionMap[s.reference_key] = s.amount_received || s.amount || null;
+      });
+    }
 
-    let query = supabase
-      .from('transactions')
-      .select('*', { count: 'exact' })
-      .eq('merchant_id', merchant.merchant_id)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (type)   query = query.eq('type',   type);
-    if (status) query = query.eq('status', status);
-
-    const { data, error, count } = await query;
-    if (error) throw error;
+    const enriched = (data || []).map(tx => {
+      if (tx.type === 'deposit' && !tx.amount_received && tx.reference_key && sessionMap[tx.reference_key]) {
+        return { ...tx, amount_received: sessionMap[tx.reference_key] };
+      }
+      return tx;
+    });
 
     res.set('Cache-Control', 'no-store');
-    res.json({ transactions: data || [], total: count || 0, limit, offset });
+    res.json({ transactions: enriched, total: count || 0, limit, offset });
   } catch (err) { next(err); }
 });
 
@@ -187,3 +175,6 @@ router.patch('/me/branding', async (req, res, next) => {
     res.json({ merchant: data });
   } catch (err) { next(err); }
 });
+
+// module.exports MUST be last — after all routes are defined
+module.exports = router;
