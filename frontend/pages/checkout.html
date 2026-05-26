@@ -15,6 +15,60 @@
     .wallet-btn:hover { opacity:.88; text-decoration:none; color:#fff; }
     .wallet-strip { display:flex; align-items:center; justify-content:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
     .wallet-pill { display:inline-flex; align-items:center; background:var(--bg); border:1px solid var(--border); border-radius:20px; padding:3px 10px; font-size:11px; color:var(--text-muted); }
+
+    /* AUDD token badge — shown beside amounts and in info rows */
+    .audd-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #E6F0FF;
+      border: 1px solid rgba(0,102,204,.15);
+      border-radius: 20px;
+      padding: 2px 8px 2px 4px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #0066CC;
+      vertical-align: middle;
+    }
+    .audd-badge img {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      object-fit: contain;
+    }
+
+    /* AUDD inline — used next to the big amount number */
+    .audd-currency-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .audd-currency-row img {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      object-fit: contain;
+    }
+
+    /* Token row in manual payment info */
+    .token-row-val {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .token-row-val img {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -66,12 +120,25 @@
       <div style="text-align:center;margin-bottom:16px;">
         <div style="font-size:13px;color:var(--text-muted);margin-bottom:4px;">Pay to</div>
         <div style="font-size:20px;font-weight:700;" id="c-merchant-name"></div>
+
+        <!-- Fixed amount — AUDD logo beside currency label -->
         <div id="c-amount-fixed" style="display:none;">
-          <div style="font-size:40px;font-weight:800;color:var(--brand);margin:8px 0 2px;" id="c-amount-val"></div>
-          <div style="font-size:13px;color:var(--text-muted);">AUDD · Solana</div>
+          <div style="font-size:40px;font-weight:800;color:var(--brand);margin:8px 0 0;" id="c-amount-val"></div>
+          <div class="audd-currency-row">
+            <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+                 alt="AUDD" onerror="this.style.display='none'"/>
+            AUDD · Solana
+          </div>
         </div>
+
+        <!-- Open amount input -->
         <div id="c-amount-open" style="display:none;margin:10px 0;">
-          <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Enter amount (AUDD)</div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;color:var(--text-muted);margin-bottom:6px;">
+            <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+                 width="16" height="16" style="border-radius:50%;object-fit:contain;"
+                 alt="AUDD" onerror="this.style.display='none'"/>
+            Enter amount (AUDD)
+          </div>
           <input class="form-input" id="c-open-amount" type="number" min="0.01" step="0.01" placeholder="0.00"
                  style="font-size:26px;font-weight:700;text-align:center;"/>
         </div>
@@ -106,7 +173,13 @@
       <!-- Confirmed -->
       <div id="c-confirmed" style="display:none;" class="alert alert-success">
         <div style="font-size:17px;font-weight:700;margin-bottom:6px;">✓ Payment confirmed!</div>
-        <div style="font-size:13px;">Received and verified on Solana.</div>
+        <div style="font-size:13px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+          Received
+          <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+               width="14" height="14" style="border-radius:50%;object-fit:contain;vertical-align:middle;"
+               alt="AUDD" onerror="this.style.display='none'"/>
+          AUDD and verified on Solana.
+        </div>
         <a id="c-conf-tx" href="#" target="_blank"
            style="display:block;font-size:11px;font-family:var(--font-mono);margin-top:8px;word-break:break-all;color:var(--teal);"></a>
       </div>
@@ -140,7 +213,7 @@
       <!-- Divider -->
       <div style="border-top:1px solid var(--border);margin:16px 0;"></div>
 
-      <!-- Universal wallet button -->
+      <!-- Wallet button -->
       <div>
         <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;text-align:center;">
           Open in your wallet app
@@ -169,6 +242,7 @@
           <span class="wallet-pill">+ any Solana wallet</span>
         </div>
 
+        <!-- Manual payment section -->
         <div style="display:flex;align-items:center;gap:10px;margin:14px 0;">
           <div style="flex:1;height:1px;background:var(--border);"></div>
           <span style="font-size:12px;color:var(--text-hint);">or pay manually</span>
@@ -177,25 +251,36 @@
 
         <div class="info-grid" style="margin-bottom:12px;">
           <span class="info-label">Vault</span>
-          <span id="c-vault-short" style="font-family:var(--font-mono);font-size:12px;cursor:pointer;color:var(--brand);" onclick="copyVault()"></span>
+          <span id="c-vault-short"
+                style="font-family:var(--font-mono);font-size:12px;cursor:pointer;color:var(--brand);"
+                onclick="copyVault()" title="Tap to copy"></span>
+
+          <!-- Token row with AUDD logo -->
           <span class="info-label">Token</span>
-          <span id="c-token-short" style="font-family:var(--font-mono);font-size:12px;"></span>
+          <span class="token-row-val">
+            <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+                 alt="AUDD" onerror="this.style.display='none'"/>
+            <span id="c-token-short"></span>
+          </span>
+
           <span class="info-label">Network</span>
           <span style="font-size:13px;">Solana Devnet</span>
         </div>
 
-        <button class="btn btn-secondary btn-full" onclick="copyVault()" style="margin-bottom:6px;">📋 Copy vault address</button>
-        <div style="font-size:11px;color:var(--text-hint);text-align:center;margin-top:6px;">
-          Send exactly the AUDD amount shown to the vault address
-        </div>
+        <button class="btn btn-secondary btn-full" onclick="copyVault()">📋 Copy vault address</button>
       </div>
 
     </div><!-- /v-pay -->
   </div>
 </div>
 
-<div style="text-align:center;padding:12px;font-size:11px;color:var(--text-hint);">
-  Secured by SETTL · Powered by Solana
+<!-- Footer with AUDD logo -->
+<div style="text-align:center;padding:14px 0 20px;font-size:11px;color:var(--text-hint);display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;">
+  Secured by SETTL · Powered by
+  <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+       width="14" height="14" style="border-radius:50%;object-fit:contain;vertical-align:middle;"
+       alt="AUDD" onerror="this.style.display='none'"/>
+  AUDD on Solana
 </div>
 
 <script src="/js/modules/api.js"></script>
@@ -244,7 +329,6 @@
     try {
       const session = await api.payments.sessionInfo(ref);
 
-      // Show brand name in header
       if (session.merchant_name) {
         document.getElementById('brand-name').textContent = session.merchant_name;
       }
@@ -269,7 +353,7 @@
       const amount = session.amount ? Number(session.amount) : null;
       if (amount !== null) {
         document.getElementById('c-amount-fixed').style.display = '';
-        document.getElementById('c-amount-val').textContent = amount.toFixed(2)+' AUDD';
+        document.getElementById('c-amount-val').textContent = amount.toFixed(2);
       } else {
         document.getElementById('c-amount-open').style.display = '';
       }
@@ -320,7 +404,6 @@
           txLink.href = `https://explorer.solana.com/tx/${r.tx}?cluster=devnet`;
           txLink.textContent = `${r.tx?.slice(0,20)}… → Solana Explorer`;
 
-          // Show payment flags
           if (r.is_overpaid) {
             document.getElementById('c-overpay').style.display = '';
             document.getElementById('c-overpay-detail').textContent =
@@ -332,7 +415,6 @@
               ` Received ${Number(r.amount_received).toFixed(4)} AUDD, short ${Number(r.underpay_amount).toFixed(4)} AUDD.`;
           }
 
-          // Redirect after 3 seconds if success_url set
           if (r.success_url || successUrl) {
             const url = r.success_url || successUrl;
             const sep = url.includes('?') ? '&' : '?';
@@ -347,7 +429,6 @@
     }, 2000);
   }
 
-  // Pause when tab hidden
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) clearInterval(pollTimer);
     else if (ref) startPolling();
