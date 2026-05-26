@@ -6,17 +6,14 @@
   <meta name="description" content="SETTL — The simplest way for Australian merchants to accept AUDD stablecoin payments on Solana. Share a link. Get paid. Funds released daily."/>
   <title>SETTL — Accept AUDD payments on Solana</title>
 
-  <!-- Fonts: Instrument Serif (display) + DM Sans (body) -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 
   <style>
-    /* ── Reset ──────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
-    /* ── Tokens ─────────────────────────────────────────── */
     :root {
       --ink:        #0A0A0B;
       --ink-soft:   #3D3D40;
@@ -40,6 +37,9 @@
       --font-body:    'DM Sans', system-ui, sans-serif;
       --max:          1100px;
       --nav-h:        64px;
+      /* AUDD official blue from their logo */
+      --audd:         #0066CC;
+      --audd-light:   #E6F0FF;
     }
 
     body {
@@ -53,10 +53,8 @@
 
     a { color: var(--brand); text-decoration: none; }
     a:hover { text-decoration: underline; }
-
     img { max-width: 100%; display: block; }
 
-    /* ── Layout ─────────────────────────────────────────── */
     .container {
       width: 100%;
       max-width: var(--max);
@@ -65,7 +63,44 @@
     }
     @media (min-width: 768px) { .container { padding: 0 40px; } }
 
-    /* ── Nav ────────────────────────────────────────────── */
+    /* ── AUDD logo pill ──────────────────────────────────── */
+    /* Reusable component used in multiple places */
+    .audd-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--audd-light);
+      border: 1px solid rgba(0,102,204,.15);
+      border-radius: 20px;
+      padding: 3px 10px 3px 4px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--audd);
+      white-space: nowrap;
+    }
+    .audd-pill img {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      object-fit: contain;
+    }
+
+    /* Inline AUDD logo beside amounts */
+    .audd-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      vertical-align: middle;
+    }
+    .audd-inline img {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+
+    /* ── Nav ─────────────────────────────────────────────── */
     nav {
       position: fixed;
       top: 0; left: 0; right: 0;
@@ -78,7 +113,6 @@
       display: flex;
       align-items: center;
     }
-
     .nav-inner {
       display: flex;
       align-items: center;
@@ -89,94 +123,26 @@
       padding: 0 20px;
     }
     @media (min-width: 768px) { .nav-inner { padding: 0 40px; } }
-
-    .nav-logo {
-      font-family: var(--font-display);
-      font-size: 22px;
-      color: var(--ink);
-      letter-spacing: -.3px;
-    }
-
-    .nav-links {
-      display: none;
-      gap: 28px;
-      list-style: none;
-    }
+    .nav-logo { font-family: var(--font-display); font-size: 22px; color: var(--ink); letter-spacing: -.3px; }
+    .nav-links { display: none; gap: 28px; list-style: none; }
     @media (min-width: 768px) { .nav-links { display: flex; } }
-    .nav-links a {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--ink-soft);
-      text-decoration: none;
-      transition: color .15s;
-    }
+    .nav-links a { font-size: 14px; font-weight: 500; color: var(--ink-soft); text-decoration: none; transition: color .15s; }
     .nav-links a:hover { color: var(--ink); }
+    .nav-cta { display: flex; gap: 10px; align-items: center; }
 
-    .nav-cta {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
+    /* ── Buttons ─────────────────────────────────────────── */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px; border-radius: var(--radius); font-family: var(--font-body); font-size: 14px; font-weight: 500; cursor: pointer; border: none; text-decoration: none; transition: all .15s; white-space: nowrap; }
+    .btn-primary { background: var(--ink); color: #fff; }
+    .btn-primary:hover { background: var(--ink-soft); text-decoration: none; color: #fff; }
+    .btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--paper-soft); text-decoration: none; color: var(--ink); }
+    .btn-brand { background: var(--brand); color: #fff; }
+    .btn-brand:hover { background: var(--brand-dark); text-decoration: none; color: #fff; }
+    .btn-lg { padding: 14px 28px; font-size: 15px; border-radius: var(--radius-lg); }
 
-    /* ── Buttons ────────────────────────────────────────── */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 10px 20px;
-      border-radius: var(--radius);
-      font-family: var(--font-body);
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-      text-decoration: none;
-      transition: all .15s;
-      white-space: nowrap;
-    }
-    .btn-primary {
-      background: var(--ink);
-      color: #fff;
-    }
-    .btn-primary:hover {
-      background: var(--ink-soft);
-      text-decoration: none;
-      color: #fff;
-    }
-    .btn-ghost {
-      background: transparent;
-      color: var(--ink-soft);
-      border: 1px solid var(--border);
-    }
-    .btn-ghost:hover {
-      background: var(--paper-soft);
-      text-decoration: none;
-      color: var(--ink);
-    }
-    .btn-brand {
-      background: var(--brand);
-      color: #fff;
-    }
-    .btn-brand:hover {
-      background: var(--brand-dark);
-      text-decoration: none;
-      color: #fff;
-    }
-    .btn-lg {
-      padding: 14px 28px;
-      font-size: 15px;
-      border-radius: var(--radius-lg);
-    }
-
-    /* ── Hero ───────────────────────────────────────────── */
-    .hero {
-      padding: calc(var(--nav-h) + 80px) 0 80px;
-      text-align: center;
-    }
-    @media (min-width: 768px) {
-      .hero { padding: calc(var(--nav-h) + 120px) 0 100px; }
-    }
+    /* ── Hero ────────────────────────────────────────────── */
+    .hero { padding: calc(var(--nav-h) + 80px) 0 80px; text-align: center; }
+    @media (min-width: 768px) { .hero { padding: calc(var(--nav-h) + 120px) 0 100px; } }
 
     .hero-eyebrow {
       display: inline-flex;
@@ -185,685 +151,209 @@
       background: var(--brand-light);
       color: var(--brand-dark);
       border-radius: 20px;
-      padding: 4px 14px;
+      padding: 4px 14px 4px 8px;
       font-size: 13px;
       font-weight: 500;
       margin-bottom: 28px;
     }
-    .hero-eyebrow-dot {
-      width: 6px;
-      height: 6px;
-      background: var(--brand);
-      border-radius: 50%;
-      animation: pulse 2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50%       { opacity: .5; transform: scale(.85); }
-    }
+    .hero-eyebrow-dot { width: 6px; height: 6px; background: var(--brand); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .5; transform: scale(.85); } }
 
-    .hero h1 {
-      font-family: var(--font-display);
-      font-size: clamp(36px, 7vw, 72px);
-      font-weight: 400;
-      line-height: 1.08;
-      letter-spacing: -.03em;
-      color: var(--ink);
-      max-width: 760px;
-      margin: 0 auto 20px;
-    }
-    .hero h1 em {
-      font-style: italic;
-      color: var(--brand);
-    }
+    .hero h1 { font-family: var(--font-display); font-size: clamp(36px, 7vw, 72px); font-weight: 400; line-height: 1.08; letter-spacing: -.03em; color: var(--ink); max-width: 760px; margin: 0 auto 20px; }
+    .hero h1 em { font-style: italic; color: var(--brand); }
+    .hero-sub { font-size: clamp(16px, 2.5vw, 19px); color: var(--ink-muted); max-width: 520px; margin: 0 auto 36px; line-height: 1.6; font-weight: 300; }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .hero-social-proof { margin-top: 48px; font-size: 13px; color: var(--ink-hint); }
+    .hero-social-proof span { color: var(--ink-soft); font-weight: 500; }
 
-    .hero-sub {
-      font-size: clamp(16px, 2.5vw, 19px);
-      color: var(--ink-muted);
-      max-width: 520px;
-      margin: 0 auto 36px;
-      line-height: 1.6;
-      font-weight: 300;
-    }
-
-    .hero-actions {
+    /* Token strip — shows AUDD logo + Solana alongside proof line */
+    .token-strip {
       display: flex;
-      gap: 12px;
+      align-items: center;
       justify-content: center;
+      gap: 16px;
+      margin-top: 32px;
       flex-wrap: wrap;
     }
-
-    .hero-social-proof {
-      margin-top: 48px;
-      font-size: 13px;
-      color: var(--ink-hint);
-    }
-    .hero-social-proof span {
-      color: var(--ink-soft);
-      font-weight: 500;
-    }
-
-    /* ── Section common ─────────────────────────────────── */
-    section {
-      padding: 80px 0;
-    }
-    @media (min-width: 768px) { section { padding: 100px 0; } }
-
-    .section-label {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: var(--brand);
-      margin-bottom: 12px;
-    }
-
-    .section-title {
-      font-family: var(--font-display);
-      font-size: clamp(28px, 4vw, 44px);
-      font-weight: 400;
-      line-height: 1.15;
-      letter-spacing: -.02em;
-      color: var(--ink);
-      margin-bottom: 16px;
-    }
-    .section-title em { font-style: italic; color: var(--brand); }
-
-    .section-sub {
-      font-size: 17px;
-      color: var(--ink-muted);
-      max-width: 520px;
-      line-height: 1.65;
-      font-weight: 300;
-    }
-
-    /* ── Divider ────────────────────────────────────────── */
-    .divider {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 0;
-    }
-
-    /* ── HOW IT WORKS ───────────────────────────────────── */
-    .steps-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 2px;
-      margin-top: 56px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-    }
-    @media (min-width: 768px) {
-      .steps-grid { grid-template-columns: repeat(3, 1fr); }
-    }
-
-    .step-card {
-      background: var(--paper);
-      padding: 36px 32px;
-      position: relative;
-      border-bottom: 1px solid var(--border);
-    }
-    @media (min-width: 768px) {
-      .step-card {
-        border-bottom: none;
-        border-right: 1px solid var(--border);
-      }
-      .step-card:last-child { border-right: none; }
-    }
-    .step-card:last-child { border-bottom: none; }
-
-    .step-number {
-      font-family: var(--font-display);
-      font-size: 48px;
-      font-weight: 400;
-      color: var(--paper-dim);
-      line-height: 1;
-      margin-bottom: 20px;
-      letter-spacing: -.04em;
-    }
-
-    .step-icon {
-      width: 40px;
-      height: 40px;
-      background: var(--paper-soft);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      display: flex;
+    .token-chip {
+      display: inline-flex;
       align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      margin-bottom: 16px;
-    }
-
-    .step-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--ink);
-      margin-bottom: 8px;
-    }
-
-    .step-desc {
-      font-size: 14px;
-      color: var(--ink-muted);
-      line-height: 1.65;
-    }
-
-    /* ── FEATURES ───────────────────────────────────────── */
-    .features-section {
-      background: var(--paper-soft);
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-    }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 1px;
-      background: var(--border);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      margin-top: 56px;
-    }
-    @media (min-width: 640px)  { .features-grid { grid-template-columns: repeat(2, 1fr); } }
-    @media (min-width: 1024px) { .features-grid { grid-template-columns: repeat(3, 1fr); } }
-
-    .feature-cell {
-      background: var(--paper);
-      padding: 28px 28px 32px;
-    }
-
-    .feature-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      margin-bottom: 14px;
-    }
-
-    .feature-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--ink);
-      margin-bottom: 6px;
-    }
-
-    .feature-desc {
-      font-size: 14px;
-      color: var(--ink-muted);
-      line-height: 1.6;
-    }
-
-    /* ── DEMO ───────────────────────────────────────────── */
-    .demo-section {
-      background: var(--paper);
-    }
-
-    .demo-layout {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 48px;
-      align-items: center;
-      margin-top: 56px;
-    }
-    @media (min-width: 900px) {
-      .demo-layout { grid-template-columns: 1fr 1fr; gap: 80px; }
-    }
-
-    .demo-phone {
+      gap: 7px;
       background: var(--paper-soft);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 24px;
-      max-width: 340px;
-      margin: 0 auto;
-      box-shadow: var(--shadow-lg);
-    }
-
-    .demo-phone-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 20px;
-    }
-
-    .demo-phone-logo {
-      font-family: var(--font-display);
-      font-size: 16px;
-      color: var(--brand);
-    }
-
-    .demo-merchant {
-      text-align: center;
-      margin-bottom: 16px;
-    }
-    .demo-merchant-name {
+      padding: 5px 12px 5px 6px;
       font-size: 13px;
-      color: var(--ink-muted);
+      font-weight: 500;
+      color: var(--ink-soft);
+    }
+    .token-chip img {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      object-fit: contain;
+    }
+    .token-chip-sep {
+      font-size: 13px;
+      color: var(--ink-hint);
+    }
+
+    /* ── Sections ────────────────────────────────────────── */
+    section { padding: 80px 0; }
+    @media (min-width: 768px) { section { padding: 100px 0; } }
+    .section-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--brand); margin-bottom: 12px; }
+    .section-title { font-family: var(--font-display); font-size: clamp(28px, 4vw, 44px); font-weight: 400; line-height: 1.15; letter-spacing: -.02em; color: var(--ink); margin-bottom: 16px; }
+    .section-title em { font-style: italic; color: var(--brand); }
+    .section-sub { font-size: 17px; color: var(--ink-muted); max-width: 520px; line-height: 1.65; font-weight: 300; }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+    /* ── Steps ───────────────────────────────────────────── */
+    .steps-grid { display: grid; grid-template-columns: 1fr; gap: 2px; margin-top: 56px; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+    @media (min-width: 768px) { .steps-grid { grid-template-columns: repeat(3, 1fr); } }
+    .step-card { background: var(--paper); padding: 36px 32px; position: relative; border-bottom: 1px solid var(--border); }
+    @media (min-width: 768px) { .step-card { border-bottom: none; border-right: 1px solid var(--border); } .step-card:last-child { border-right: none; } }
+    .step-card:last-child { border-bottom: none; }
+    .step-number { font-family: var(--font-display); font-size: 48px; font-weight: 400; color: var(--paper-dim); line-height: 1; margin-bottom: 20px; letter-spacing: -.04em; }
+    .step-icon { width: 40px; height: 40px; background: var(--paper-soft); border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 16px; }
+    .step-title { font-size: 16px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+    .step-desc { font-size: 14px; color: var(--ink-muted); line-height: 1.65; }
+
+    /* ── Features ────────────────────────────────────────── */
+    .features-section { background: var(--paper-soft); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .features-grid { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-top: 56px; }
+    @media (min-width: 640px)  { .features-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1024px) { .features-grid { grid-template-columns: repeat(3, 1fr); } }
+    .feature-cell { background: var(--paper); padding: 28px 28px 32px; }
+    .feature-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; margin-bottom: 14px; }
+    .feature-title { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+    .feature-desc { font-size: 14px; color: var(--ink-muted); line-height: 1.6; }
+
+    /* ── Demo ────────────────────────────────────────────── */
+    .demo-section { background: var(--paper); }
+    .demo-layout { display: grid; grid-template-columns: 1fr; gap: 48px; align-items: center; margin-top: 56px; }
+    @media (min-width: 900px) { .demo-layout { grid-template-columns: 1fr 1fr; gap: 80px; } }
+
+    .demo-phone { background: var(--paper-soft); border: 1px solid var(--border); border-radius: 20px; padding: 24px; max-width: 340px; margin: 0 auto; box-shadow: var(--shadow-lg); }
+    .demo-phone-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .demo-phone-logo { font-family: var(--font-display); font-size: 16px; color: var(--brand); }
+    .demo-merchant { text-align: center; margin-bottom: 16px; }
+    .demo-merchant-name { font-size: 13px; color: var(--ink-muted); margin-bottom: 4px; }
+    .demo-merchant-biz { font-size: 18px; font-weight: 600; color: var(--ink); }
+
+    /* Amount row with AUDD logo */
+    .demo-amount-row {
+      text-align: center;
       margin-bottom: 4px;
     }
-    .demo-merchant-biz {
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--ink);
-    }
-    .demo-amount {
+    .demo-amount-num {
       font-family: var(--font-display);
       font-size: 42px;
-      text-align: center;
       color: var(--brand);
-      margin-bottom: 4px;
       letter-spacing: -.02em;
+      line-height: 1;
     }
-    .demo-currency {
-      text-align: center;
-      font-size: 13px;
-      color: var(--ink-muted);
-      margin-bottom: 20px;
-    }
-
-    /* QR placeholder — animated pattern */
-    .qr-placeholder {
-      width: 160px;
-      height: 160px;
-      margin: 0 auto 20px;
-      border-radius: 10px;
-      background: var(--paper);
-      border: 1px solid var(--border);
+    .demo-currency-row {
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
-      position: relative;
-    }
-    .qr-grid {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 2px;
-      width: 140px;
-      height: 140px;
-    }
-    .qr-cell {
-      border-radius: 1px;
-    }
-
-    .demo-wallet-btn {
-      width: 100%;
-      padding: 12px;
-      background: var(--ink);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius);
-      font-family: var(--font-body);
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      text-align: center;
-      margin-bottom: 12px;
-    }
-
-    .demo-wallets {
-      display: flex;
       gap: 6px;
-      justify-content: center;
-      flex-wrap: wrap;
+      margin-bottom: 20px;
+      margin-top: 6px;
     }
-    .demo-wallet-tag {
-      background: var(--paper-dim);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 2px 10px;
-      font-size: 11px;
+    .demo-currency-row img {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      object-fit: contain;
+    }
+    .demo-currency-text {
+      font-size: 13px;
       color: var(--ink-muted);
     }
 
-    .demo-confirmed {
-      display: none;
-      text-align: center;
-      padding: 16px;
-      background: var(--teal-light);
-      border: 1px solid #6EE7B7;
-      border-radius: var(--radius);
-      margin-top: 12px;
-    }
+    .qr-placeholder { width: 160px; height: 160px; margin: 0 auto 20px; border-radius: 10px; background: var(--paper); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+    .qr-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; width: 140px; height: 140px; }
+    .qr-cell { border-radius: 1px; }
+    .demo-wallet-btn { width: 100%; padding: 12px; background: var(--ink); color: #fff; border: none; border-radius: var(--radius); font-family: var(--font-body); font-size: 14px; font-weight: 500; cursor: pointer; text-align: center; margin-bottom: 12px; }
+    .demo-wallets { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+    .demo-wallet-tag { background: var(--paper-dim); border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; font-size: 11px; color: var(--ink-muted); }
+    .demo-copy-row { display: flex; gap: 8px; margin-top: 10px; }
+    .demo-copy-input { flex: 1; background: var(--paper-soft); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 12px; font-family: monospace; color: var(--ink-soft); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .demo-copy-btn { background: var(--paper); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 12px; cursor: pointer; white-space: nowrap; font-family: var(--font-body); transition: background .15s; }
+    .demo-copy-btn:hover { background: var(--paper-dim); }
+    .demo-confirmed { display: none; text-align: center; padding: 16px; background: var(--teal-light); border: 1px solid #6EE7B7; border-radius: var(--radius); margin-top: 12px; }
     .demo-confirmed.show { display: block; }
     .demo-confirmed-icon { font-size: 28px; margin-bottom: 6px; }
     .demo-confirmed-text { font-size: 14px; font-weight: 600; color: #065F46; }
-    .demo-confirmed-sub  { font-size: 12px; color: #047857; margin-top: 2px; }
+    .demo-confirmed-sub { font-size: 12px; color: #047857; margin-top: 2px; }
 
-    .demo-copy-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .demo-copy-input {
-      flex: 1;
-      background: var(--paper-soft);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 12px;
+    /* Confirmed sub with AUDD logo */
+    .demo-confirmed-amount {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
       font-size: 12px;
-      font-family: monospace;
-      color: var(--ink-soft);
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
+      color: #047857;
+      margin-top: 2px;
     }
-    .demo-copy-btn {
-      background: var(--paper);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 12px;
-      cursor: pointer;
-      white-space: nowrap;
-      font-family: var(--font-body);
-      transition: background .15s;
-    }
-    .demo-copy-btn:hover { background: var(--paper-dim); }
+    .demo-confirmed-amount img { width: 14px; height: 14px; border-radius: 50%; }
 
     .demo-text { max-width: 480px; }
-    .demo-checklist {
-      list-style: none;
-      margin-top: 28px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .demo-checklist li {
-      display: flex;
-      gap: 14px;
-      align-items: flex-start;
-    }
-    .demo-check {
-      width: 22px;
-      height: 22px;
-      background: var(--teal-light);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      flex-shrink: 0;
-      margin-top: 2px;
-      color: var(--teal);
-      font-weight: 700;
-    }
-    .demo-check-text strong {
-      display: block;
-      font-size: 15px;
-      font-weight: 500;
-      color: var(--ink);
-      margin-bottom: 2px;
-    }
-    .demo-check-text span {
-      font-size: 13px;
-      color: var(--ink-muted);
-    }
+    .demo-checklist { list-style: none; margin-top: 28px; display: flex; flex-direction: column; gap: 16px; }
+    .demo-checklist li { display: flex; gap: 14px; align-items: flex-start; }
+    .demo-check { width: 22px; height: 22px; background: var(--teal-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; margin-top: 2px; color: var(--teal); font-weight: 700; }
+    .demo-check-text strong { display: block; font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 2px; }
+    .demo-check-text span { font-size: 13px; color: var(--ink-muted); }
 
-    /* ── PRICING ────────────────────────────────────────── */
-    .pricing-section {
-      background: var(--paper-soft);
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-    }
+    /* ── Pricing ─────────────────────────────────────────── */
+    .pricing-section { background: var(--paper-soft); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .pricing-card { max-width: 520px; margin: 56px auto 0; background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-md); }
+    .pricing-top { padding: 36px 36px 28px; border-bottom: 1px solid var(--border); }
+    .pricing-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--brand); margin-bottom: 10px; }
+    .pricing-amount { display: flex; align-items: baseline; gap: 4px; margin-bottom: 6px; }
+    .pricing-number { font-family: var(--font-display); font-size: 64px; color: var(--ink); line-height: 1; letter-spacing: -.04em; }
+    .pricing-unit { font-size: 20px; color: var(--ink-muted); font-weight: 300; }
+    .pricing-desc { font-size: 15px; color: var(--ink-muted); line-height: 1.6; }
+    .pricing-includes { padding: 24px 36px 32px; }
+    .pricing-includes-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-hint); margin-bottom: 16px; }
+    .pricing-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+    .pricing-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); }
+    .pricing-list li::before { content: '✓'; color: var(--teal); font-weight: 700; font-size: 13px; flex-shrink: 0; }
+    .pricing-cta { padding: 0 36px 32px; }
 
-    .pricing-card {
-      max-width: 520px;
-      margin: 56px auto 0;
-      background: var(--paper);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      box-shadow: var(--shadow-md);
-    }
-
-    .pricing-top {
-      padding: 36px 36px 28px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .pricing-label {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: var(--brand);
-      margin-bottom: 10px;
-    }
-
-    .pricing-amount {
-      display: flex;
-      align-items: baseline;
-      gap: 4px;
-      margin-bottom: 6px;
-    }
-    .pricing-number {
-      font-family: var(--font-display);
-      font-size: 64px;
-      color: var(--ink);
-      line-height: 1;
-      letter-spacing: -.04em;
-    }
-    .pricing-unit {
-      font-size: 20px;
-      color: var(--ink-muted);
-      font-weight: 300;
-    }
-
-    .pricing-desc {
-      font-size: 15px;
-      color: var(--ink-muted);
-      line-height: 1.6;
-    }
-
-    .pricing-includes {
-      padding: 24px 36px 32px;
-    }
-
-    .pricing-includes-label {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      color: var(--ink-hint);
-      margin-bottom: 16px;
-    }
-
-    .pricing-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .pricing-list li {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 14px;
-      color: var(--ink-soft);
-    }
-    .pricing-list li::before {
-      content: '✓';
-      color: var(--teal);
-      font-weight: 700;
-      font-size: 13px;
-      flex-shrink: 0;
-    }
-
-    .pricing-cta {
-      padding: 0 36px 32px;
-    }
-
-    /* ── CTA BANNER ─────────────────────────────────────── */
-    .cta-section {
-      text-align: center;
-      padding: 100px 0;
-    }
-
-    .cta-section h2 {
-      font-family: var(--font-display);
-      font-size: clamp(32px, 5vw, 56px);
-      font-weight: 400;
-      line-height: 1.1;
-      letter-spacing: -.03em;
-      color: var(--ink);
-      margin-bottom: 20px;
-      max-width: 600px;
-      margin-left: auto;
-      margin-right: auto;
-    }
+    /* ── CTA ─────────────────────────────────────────────── */
+    .cta-section { text-align: center; padding: 100px 0; }
+    .cta-section h2 { font-family: var(--font-display); font-size: clamp(32px, 5vw, 56px); font-weight: 400; line-height: 1.1; letter-spacing: -.03em; color: var(--ink); margin-bottom: 20px; max-width: 600px; margin-left: auto; margin-right: auto; }
     .cta-section h2 em { font-style: italic; color: var(--brand); }
+    .cta-section p { font-size: 17px; color: var(--ink-muted); margin-bottom: 36px; font-weight: 300; }
 
-    .cta-section p {
-      font-size: 17px;
-      color: var(--ink-muted);
-      margin-bottom: 36px;
-      font-weight: 300;
-    }
-
-    /* ── FOOTER ─────────────────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 48px 0 40px;
-    }
-
-    .footer-inner {
-      display: flex;
-      flex-direction: column;
-      gap: 32px;
-    }
-    @media (min-width: 768px) {
-      .footer-inner {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: flex-start;
-      }
-    }
-
-    .footer-brand .footer-logo {
-      font-family: var(--font-display);
-      font-size: 20px;
-      color: var(--ink);
-      margin-bottom: 8px;
-    }
-
-    .footer-brand p {
-      font-size: 13px;
-      color: var(--ink-muted);
-      max-width: 240px;
-      line-height: 1.6;
-    }
-
-    .footer-links-group {
-      display: flex;
-      gap: 40px;
-      flex-wrap: wrap;
-    }
-
-    .footer-col h4 {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      color: var(--ink-hint);
-      margin-bottom: 12px;
-    }
-
-    .footer-col ul {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .footer-col a {
-      font-size: 14px;
-      color: var(--ink-muted);
-      text-decoration: none;
-      transition: color .15s;
-    }
+    /* ── Footer ──────────────────────────────────────────── */
+    footer { border-top: 1px solid var(--border); padding: 48px 0 40px; }
+    .footer-inner { display: flex; flex-direction: column; gap: 32px; }
+    @media (min-width: 768px) { .footer-inner { flex-direction: row; justify-content: space-between; align-items: flex-start; } }
+    .footer-brand .footer-logo { font-family: var(--font-display); font-size: 20px; color: var(--ink); margin-bottom: 8px; }
+    .footer-brand p { font-size: 13px; color: var(--ink-muted); max-width: 240px; line-height: 1.6; }
+    .footer-links-group { display: flex; gap: 40px; flex-wrap: wrap; }
+    .footer-col h4 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-hint); margin-bottom: 12px; }
+    .footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .footer-col a { font-size: 14px; color: var(--ink-muted); text-decoration: none; transition: color .15s; }
     .footer-col a:hover { color: var(--ink); text-decoration: none; }
+    .footer-bottom { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+    @media (min-width: 768px) { .footer-bottom { flex-direction: row; justify-content: space-between; align-items: center; } }
+    .footer-bottom p { font-size: 13px; color: var(--ink-hint); }
+    .footer-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+    .footer-badge { display: inline-flex; align-items: center; gap: 5px; background: var(--paper-soft); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; font-size: 11px; color: var(--ink-muted); }
+    .footer-badge img { width: 14px; height: 14px; border-radius: 50%; object-fit: contain; }
+    .footer-badge-dot { width: 5px; height: 5px; border-radius: 50%; }
 
-    .footer-bottom {
-      margin-top: 40px;
-      padding-top: 24px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      align-items: flex-start;
-    }
-    @media (min-width: 768px) {
-      .footer-bottom { flex-direction: row; justify-content: space-between; align-items: center; }
-    }
+    /* ── Reveal ──────────────────────────────────────────── */
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .6s ease, transform .6s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
 
-    .footer-bottom p {
-      font-size: 13px;
-      color: var(--ink-hint);
-    }
-
-    .footer-badges {
-      display: flex;
-      gap: 8px;
-    }
-    .footer-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      background: var(--paper-soft);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 3px 10px;
-      font-size: 11px;
-      color: var(--ink-muted);
-    }
-    .footer-badge-dot {
-      width: 5px; height: 5px;
-      border-radius: 50%;
-    }
-
-    /* ── Reveal on scroll ───────────────────────────────── */
-    .reveal {
-      opacity: 0;
-      transform: translateY(20px);
-      transition: opacity .6s ease, transform .6s ease;
-    }
-    .reveal.visible {
-      opacity: 1;
-      transform: none;
-    }
-
-    /* ── Demo animation ─────────────────────────────────── */
-    .demo-simulate-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--paper-dim);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 6px 14px;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--ink-soft);
-      cursor: pointer;
-      font-family: var(--font-body);
-      transition: background .15s;
-      margin-top: 20px;
-    }
+    /* ── Demo animate ────────────────────────────────────── */
+    .demo-simulate-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--paper-dim); border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 500; color: var(--ink-soft); cursor: pointer; font-family: var(--font-body); transition: background .15s; margin-top: 20px; }
     .demo-simulate-btn:hover { background: var(--border); }
-    .demo-simulate-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--teal);
-    }
-
-    /* Spinning for simulate */
+    .demo-simulate-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinning { animation: spin .7s linear infinite; display: inline-block; }
   </style>
@@ -890,9 +380,15 @@
 <!-- ── HERO ──────────────────────────────────────────────── -->
 <section class="hero">
   <div class="container">
+
+    <!-- Eyebrow with AUDD logo -->
     <div class="hero-eyebrow">
-      <div class="hero-eyebrow-dot"></div>
-      Built on Solana · AUDD stablecoin
+      <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+           width="18" height="18"
+           style="border-radius:50%;object-fit:contain;"
+           alt="AUDD"
+           onerror="this.style.display='none'"/>
+      Built on Solana · AUDD Australian Dollar
     </div>
 
     <h1>
@@ -914,9 +410,21 @@
       </a>
     </div>
 
-    <p class="hero-social-proof">
-      Powered by <span>Solana Pay</span> · Secured by <span>Anchor smart contracts</span>
-    </p>
+    <!-- Token strip — shows AUDD + Solana as recognised chips -->
+    <div class="token-strip">
+      <span class="token-chip">
+        <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+             alt="AUDD" onerror="this.style.display='none'"/>
+        AUDD · Australian Digital Dollar
+      </span>
+      <span class="token-chip-sep">×</span>
+      <span class="token-chip">
+        <img src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
+             alt="Solana" onerror="this.style.display='none'"/>
+        Solana Pay
+      </span>
+    </div>
+
   </div>
 </section>
 
@@ -940,25 +448,28 @@
         <div class="step-icon">👤</div>
         <div class="step-title">Create your account</div>
         <p class="step-desc">
-          Sign up with your email and Solana wallet address. Your merchant escrow vault is registered on-chain automatically in the background — no manual steps.
+          Sign up with your email and Solana wallet address. Your merchant escrow vault is registered on-chain automatically — no manual steps.
         </p>
       </div>
-
       <div class="step-card">
         <div class="step-number">02</div>
         <div class="step-icon">⊕</div>
         <div class="step-title">Generate a payment link</div>
         <p class="step-desc">
-          Enter an amount (or leave it open) and get a QR code plus a shareable link instantly. Send it via WhatsApp, email, or embed it on your website.
+          Enter an amount (or leave it open) and get a QR code plus a shareable link instantly. Send it via WhatsApp, email, or embed on your website.
         </p>
       </div>
-
       <div class="step-card">
         <div class="step-number">03</div>
-        <div class="step-icon">$</div>
-        <div class="step-title">Receive funds daily</div>
+        <!-- Step 3 icon shows AUDD logo -->
+        <div class="step-icon" style="padding:0;overflow:hidden;border:none;background:transparent;">
+          <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+               width="40" height="40" style="border-radius:10px;object-fit:contain;"
+               alt="AUDD" onerror="this.style.fontSize='18px';this.outerHTML='<span style=\'font-size:18px\'>$</span>'"/>
+        </div>
+        <div class="step-title">Receive AUDD daily</div>
         <p class="step-desc">
-          Payments go straight into your on-chain escrow vault. Every day at 6am UTC, SETTL automatically releases your balance to your wallet, net of 1.5%.
+          Payments land in your on-chain escrow vault as AUDD. Every day at 6am UTC, SETTL automatically releases your balance to your wallet, net of 1.5%.
         </p>
       </div>
     </div>
@@ -979,55 +490,41 @@
     </div>
 
     <div class="features-grid reveal">
-
       <div class="feature-cell">
         <div class="feature-icon" style="background:#EEF2FF;">📱</div>
         <div class="feature-title">Solana Pay QR</div>
-        <p class="feature-desc">
-          Customers scan with Phantom, Backpack, Solflare or any Solana wallet. No app needed on your side.
-        </p>
+        <p class="feature-desc">Customers scan with Phantom, Backpack, Solflare or any Solana wallet. No app needed on your side.</p>
       </div>
-
       <div class="feature-cell">
-        <div class="feature-icon" style="background:#F0FDF4;">🔗</div>
-        <div class="feature-title">Reusable links</div>
-        <p class="feature-desc">
-          Create a permanent link for your tip jar, product page, or invoice. Each visitor gets a fresh session automatically.
-        </p>
+        <!-- AUDD icon in features -->
+        <div class="feature-icon" style="background:var(--audd-light);padding:0;overflow:hidden;">
+          <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+               width="36" height="36" style="border-radius:8px;object-fit:contain;"
+               alt="AUDD" onerror="this.parentElement.textContent='$'"/>
+        </div>
+        <div class="feature-title">AUDD stablecoin</div>
+        <p class="feature-desc">Payments in AUDD — Australia's fully backed 1:1 AUD stablecoin. No price volatility. What you see is what you get.</p>
       </div>
-
       <div class="feature-cell">
         <div class="feature-icon" style="background:#FFF7ED;">⌁</div>
         <div class="feature-title">Webhooks</div>
-        <p class="feature-desc">
-          Get an HTTP POST to your server the moment a payment confirms. HMAC-signed so you know it's real. 3 retries on failure.
-        </p>
+        <p class="feature-desc">Get an HTTP POST to your server the moment a payment confirms. HMAC-signed so you know it's real. 3 retries on failure.</p>
       </div>
-
       <div class="feature-cell">
         <div class="feature-icon" style="background:#FDF4FF;">⌘</div>
         <div class="feature-title">API keys</div>
-        <p class="feature-desc">
-          Create payment sessions from your own backend. One API call returns a checkout URL you redirect your customer to.
-        </p>
+        <p class="feature-desc">Create payment sessions from your own backend. One API call returns a checkout URL you redirect your customer to.</p>
       </div>
-
       <div class="feature-cell">
         <div class="feature-icon" style="background:#ECFDF5;">🎨</div>
         <div class="feature-title">Checkout branding</div>
-        <p class="feature-desc">
-          Set your business name, logo, and brand colour. Your customers see your brand, not SETTL's, on the checkout page.
-        </p>
+        <p class="feature-desc">Set your business name, logo, and brand colour. Your customers see your brand, not SETTL's, on the checkout page.</p>
       </div>
-
       <div class="feature-cell">
         <div class="feature-icon" style="background:#EFF6FF;">↺</div>
         <div class="feature-title">Daily auto-release</div>
-        <p class="feature-desc">
-          No manual withdrawals. Every day at 6am UTC, your escrow balance is automatically released to your wallet on-chain.
-        </p>
+        <p class="feature-desc">No manual withdrawals. Every day at 6am UTC, your escrow balance is automatically released to your wallet on-chain.</p>
       </div>
-
     </div>
   </div>
 </section>
@@ -1050,10 +547,17 @@
             <div class="demo-merchant-biz">The Coffee Lab</div>
           </div>
 
-          <div class="demo-amount">25.00</div>
-          <div class="demo-currency">AUDD · Solana Devnet</div>
+          <!-- Amount with AUDD logo -->
+          <div class="demo-amount-row">
+            <div class="demo-amount-num">25.00</div>
+          </div>
+          <div class="demo-currency-row">
+            <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+                 width="18" height="18" alt="AUDD"
+                 onerror="this.style.display='none'"/>
+            <span class="demo-currency-text">AUDD · Solana Devnet</span>
+          </div>
 
-          <!-- Animated QR -->
           <div class="qr-placeholder">
             <div class="qr-grid" id="qr-grid"></div>
           </div>
@@ -1074,10 +578,15 @@
             <button class="demo-copy-btn" onclick="copyDemo(this)">Copy</button>
           </div>
 
+          <!-- Confirmed state with AUDD logo -->
           <div class="demo-confirmed" id="demo-confirmed">
             <div class="demo-confirmed-icon">✓</div>
             <div class="demo-confirmed-text">Payment confirmed!</div>
-            <div class="demo-confirmed-sub">25.00 AUDD received on Solana</div>
+            <div class="demo-confirmed-amount">
+              <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+                   alt="AUDD" onerror="this.style.display='none'"/>
+              25.00 AUDD received on Solana
+            </div>
           </div>
         </div>
 
@@ -1094,10 +603,8 @@
         <div class="section-label">Live demo</div>
         <h2 class="section-title">What your customers see when they <em>pay</em></h2>
         <p class="section-sub">
-          The checkout page works for anyone — no SETTL account needed.
-          Just a link or QR code.
+          The checkout page works for anyone — no SETTL account needed. Just a link or QR code.
         </p>
-
         <ul class="demo-checklist">
           <li>
             <div class="demo-check">✓</div>
@@ -1143,8 +650,7 @@
       <div class="section-label">Pricing</div>
       <h2 class="section-title">Simple. <em>Transparent.</em> No surprises.</h2>
       <p class="section-sub" style="margin:0 auto;">
-        One flat fee on every release. No monthly subscriptions.
-        No setup fees. No hidden charges.
+        One flat fee on every release. No monthly subscriptions. No setup fees. No hidden charges.
       </p>
     </div>
 
@@ -1155,9 +661,15 @@
           <span class="pricing-number">1.5</span>
           <span class="pricing-unit">% per release</span>
         </div>
+        <!-- Example with AUDD logo -->
         <p class="pricing-desc">
-          Charged once per daily release — not per transaction. Receive 100 AUDD in a day,
-          pay 1.50 AUDD. The rest goes straight to your wallet.
+          Charged once per daily release — not per transaction. Receive 100&nbsp;
+          <span class="audd-inline">
+            <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+                 alt="AUDD" onerror="this.style.display='none'"/>
+            AUDD
+          </span>
+          in a day, pay 1.50 AUDD. The rest goes straight to your wallet.
         </p>
       </div>
 
@@ -1218,7 +730,6 @@
             <li><a href="/pages/docs/index.html">Documentation</a></li>
           </ul>
         </div>
-
         <div class="footer-col">
           <h4>Account</h4>
           <ul>
@@ -1228,7 +739,6 @@
             <li><a href="/pages/merchant/paylink.html">Create payment</a></li>
           </ul>
         </div>
-
         <div class="footer-col">
           <h4>Community</h4>
           <ul>
@@ -1246,10 +756,12 @@
       <div class="footer-badges">
         <span class="footer-badge">
           <span class="footer-badge-dot" style="background:#14F195;"></span>
-          Solana Devnet
+          Solana
         </span>
+        <!-- AUDD badge with real logo -->
         <span class="footer-badge">
-          <span class="footer-badge-dot" style="background:var(--teal);"></span>
+          <img src="https://coin-images.coingecko.com/coins/images/33263/large/AUDD-Logo-Blue_512.png?1701319895"
+               alt="AUDD" onerror="this.style.display='none'"/>
           AUDD
         </span>
       </div>
@@ -1263,8 +775,7 @@
   try {
     const token = localStorage.getItem('settl_token');
     if (token) {
-      // Verify token is not expired by checking its payload
-      const parts   = token.split('.');
+      const parts = token.split('.');
       if (parts.length === 3) {
         const payload = JSON.parse(atob(parts[1]));
         if (payload.exp && payload.exp * 1000 > Date.now()) {
@@ -1274,50 +785,25 @@
       }
     }
   } catch {}
-
-  // Update nav buttons to show correct state
-  const loginBtn  = document.getElementById('nav-login');
-  const signupBtn = document.getElementById('nav-signup');
-  if (loginBtn && signupBtn) {
-    loginBtn.style.display  = '';
-    signupBtn.style.display = '';
-  }
 })();
 
-// ── Generate QR grid ─────────────────────────────────────
+// ── QR grid ──────────────────────────────────────────────
 (function() {
   const grid = document.getElementById('qr-grid');
   if (!grid) return;
-
-  // Fixed pattern that looks like a real QR
-  const SIZE = 12;
-  const cells = SIZE * SIZE;
-
-  // Corner markers (top-left, top-right, bottom-left)
+  const SIZE = 12, cells = SIZE * SIZE;
   const corners = new Set();
   const addCorner = (r, c) => {
     for (let dr = 0; dr < 7; dr++)
       for (let dc = 0; dc < 7; dc++)
-        if (dr === 0 || dr === 6 || dc === 0 || dc === 6 ||
-            (dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4))
-          corners.add((r+dr) * SIZE + (c+dc));
+        if (dr===0||dr===6||dc===0||dc===6||(dr>=2&&dr<=4&&dc>=2&&dc<=4))
+          corners.add((r+dr)*SIZE+(c+dc));
   };
-  addCorner(0, 0); // TL
-  addCorner(0, SIZE-7); // TR
-
+  addCorner(0,0); addCorner(0,SIZE-7);
   for (let i = 0; i < cells; i++) {
     const cell = document.createElement('div');
     cell.className = 'qr-cell';
-    const r = Math.floor(i / SIZE);
-    const c = i % SIZE;
-
-    if (corners.has(i)) {
-      cell.style.background = '#111827';
-    } else if (Math.random() > 0.55) {
-      cell.style.background = '#111827';
-    } else {
-      cell.style.background = 'transparent';
-    }
+    cell.style.background = corners.has(i) ? '#111827' : (Math.random()>.55 ? '#111827' : 'transparent');
     grid.appendChild(cell);
   }
 })();
@@ -1327,20 +813,13 @@ let simRunning = false;
 function simulatePayment() {
   if (simRunning) return;
   simRunning = true;
-
   const confirmed = document.getElementById('demo-confirmed');
   confirmed.classList.remove('show');
-
   const btn = document.querySelector('.demo-simulate-btn');
-  if (btn) {
-    btn.innerHTML = '<span class="spinning">◌</span> Processing…';
-    btn.style.pointerEvents = 'none';
-  }
-
-  // Simulate 2s processing
+  if (btn) { btn.innerHTML = '<span class="spinning">◌</span> Processing…'; btn.style.pointerEvents='none'; }
   setTimeout(() => {
     confirmed.classList.add('show');
-    confirmed.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    confirmed.scrollIntoView({ behavior:'smooth', block:'nearest' });
     if (btn) {
       btn.innerHTML = '<span style="color:var(--teal);">●</span> Payment confirmed!';
       setTimeout(() => {
@@ -1353,7 +832,7 @@ function simulatePayment() {
   }, 2000);
 }
 
-// ── Copy demo link ───────────────────────────────────────
+// ── Copy demo ────────────────────────────────────────────
 function copyDemo(btn) {
   navigator.clipboard.writeText('https://settl.app/pay/coffee-lab').then(() => {
     const orig = btn.textContent;
@@ -1362,16 +841,10 @@ function copyDemo(btn) {
   });
 }
 
-// ── Scroll reveal ────────────────────────────────────────
+// ── Scroll reveal ─────────────────────────────────────────
 const observer = new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      e.target.classList.add('visible');
-      observer.unobserve(e.target);
-    }
-  });
+  entries.forEach(e => { if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target);} });
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 </script>
 </body>
